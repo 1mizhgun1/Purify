@@ -12,7 +12,7 @@ services:
       - purify-network
     volumes:
       - type: bind
-        source: /var/log/purify
+        source: ${LOG_DIRECTORY}
         target: /var/log/purify
 
 networks:
