@@ -5,10 +5,12 @@
 1. Создать в корне проекта файл `.env`. Пример содержимого файла:
 
     ```env
-    MAIN_LOG_FILE=/var/log/purify/main.log
-    CONFIG_FILE=src/config/config.yaml
-    
-    FRONTEND_HOST_NAME=http://localhost:3000
+   LOG_DIRECTORY=/var/log/purify
+   
+   MAIN_LOG_FILE=${LOG_DIRECTORY}/main.log
+   CONFIG_FILE=src/config/config.yaml
+   
+   FRONTEND_HOST_NAME=http://localhost:3000
     ```
 
 2. При первом запуске выполнить команду:
@@ -17,7 +19,7 @@
    sudo mkdir -p /var/log/purify
    ```
    
-   Директория для лог файла должна быть такой же, как и в `MAIN_LOG_FILE` в `.env`.
+   Директория для лог файла должна совпадать с `LOG_DIRECTORY` из `.env`.
 
 3. Собрать и запустить проект:
 
