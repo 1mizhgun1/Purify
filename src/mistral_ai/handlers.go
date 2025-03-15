@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"purify/src/config"
 	"purify/src/utils"
@@ -49,6 +50,9 @@ func (m *MistralAI) AnalyzeText(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Println("[DEBUG] resultMessage = " + resultMessage)
+
+	resultMessage = strings.TrimPrefix(resultMessage, "```json")
+	resultMessage = strings.TrimSuffix(resultMessage, "```")
 
 	var textParts []TextPart
 	if err = json.Unmarshal([]byte(resultMessage), &textParts); err != nil {
