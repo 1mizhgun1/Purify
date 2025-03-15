@@ -11,6 +11,8 @@
    CONFIG_FILE=src/config/config.yaml
    
    FRONTEND_HOST_NAME=http://localhost:3000
+   
+   MISTRAL_AI_API_KEY=some_key
     ```
 
 2. При первом запуске выполнить команду:

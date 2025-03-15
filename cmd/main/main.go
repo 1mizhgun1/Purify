@@ -16,11 +16,12 @@ import (
 	"github.com/pkg/errors"
 	"purify/src/config"
 	"purify/src/middleware"
+	"purify/src/mistral_ai"
 )
 
 func init() {
 	if err := godotenv.Load(); err != nil {
-		log.Printf("failed to load .env file: %v", err)
+		log.Fatalf("failed to load .env file: %v", err)
 	}
 }
 
@@ -36,6 +37,8 @@ func main() {
 	cfg := config.MustLoadConfig(os.Getenv("CONFIG_FILE"), logger)
 	logger.Info("Config file loaded")
 
+	mistralAI := mistral_ai.NewMistralAI(cfg.MistralAI)
+
 	reqIDMiddleware := middleware.CreateRequestIDMiddleware(logger)
 
 	r := mux.NewRouter().PathPrefix("/api/v1").Subrouter()
@@ -47,6 +50,8 @@ func main() {
 
 	// handlers will be there
 	r.Handle("/ping", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("pong")) }))
+
+	r.Handle("/ask_mistral_ai", http.HandlerFunc(mistralAI.Ask)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)
 	server := http.Server{

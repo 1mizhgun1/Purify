@@ -14,7 +14,8 @@ type LoggerKey string
 const LoggerContextKey LoggerKey = "logger"
 
 type Config struct {
-	Main MainConfig `yaml:"main"`
+	Main      MainConfig      `yaml:"main"`
+	MistralAI MistralAIConfig `yaml:"mistral_ai"`
 }
 
 type MainConfig struct {
@@ -24,6 +25,11 @@ type MainConfig struct {
 	ReadHeaderTimeout time.Duration `yaml:"read_header_timeout"`
 	IdleTimeout       time.Duration `yaml:"idle_timeout"`
 	ShutdownTimeout   time.Duration `yaml:"shutdown_timeout"`
+}
+
+type MistralAIConfig struct {
+	BaseURL        string `yaml:"base_url"`
+	CompletionsURL string `yaml:"completions_url"`
 }
 
 func MustLoadConfig(path string, logger *slog.Logger) *Config {
