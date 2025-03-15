@@ -1,1 +1,21 @@
+services:
+  main:
+    container_name: main
+    build:
+      context: .
+      dockerfile: ./build/main.Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    networks:
+      - purify-network
+    volumes:
+      - type: bind
+        source: ${LOG_DIRECTORY}
+        target: /var/log/purify
 
+networks:
+  purify-network:
+    name: purify-network
+    driver: bridge
