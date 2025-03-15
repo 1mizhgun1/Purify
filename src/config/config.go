@@ -30,6 +30,7 @@ type MainConfig struct {
 type MistralAIConfig struct {
 	BaseURL        string `yaml:"base_url"`
 	CompletionsURL string `yaml:"completions_url"`
+	WordsInChunk   int    `yaml:"words_in_chunk"`
 }
 
 func MustLoadConfig(path string, logger *slog.Logger) *Config {
