@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"purify/src/config"
@@ -44,7 +45,7 @@ func (m *MistralAI) AnalyzeText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chunks := utils.SplitTextIntoChunks(req.Text, m.cfg.WordsInChunk)
+	chunks := utils.SplitTextIntoChunks(req.Text, m.cfg.WordsInChunk, m.cfg.MaxChunks)
 
 	wg := &sync.WaitGroup{}
 	responses := make(chan ChunkInChannel)
@@ -52,6 +53,7 @@ func (m *MistralAI) AnalyzeText(w http.ResponseWriter, r *http.Request) {
 
 	for i, chunk := range chunks {
 		wg.Add(1)
+		time.Sleep(time.Millisecond)
 		go m.sendChunkRequest(chunk, i, wg, responses, errorsCh)
 	}
 

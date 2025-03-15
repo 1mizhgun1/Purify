@@ -5,7 +5,21 @@ import (
 	"strings"
 )
 
-var re = regexp.MustCompile(`(\S+)(\s*)`)
+var (
+	re      = regexp.MustCompile(`(\S+)(\s*)`)
+	countRe = regexp.MustCompile(`\s+`)
+)
+
+func countWords(text string) int {
+	words := countRe.Split(text, -1)
+	wordCount := 0
+	for _, word := range words {
+		if word != "" {
+			wordCount++
+		}
+	}
+	return wordCount
+}
 
 func splitTextWithDelimiters(text string) [][]string {
 	return re.FindAllStringSubmatch(text, -1)
@@ -19,7 +33,11 @@ func flattenSplitResult(splitResult [][]string) []string {
 	return words
 }
 
-func SplitTextIntoChunks(text string, chunkSize int) []string {
+func SplitTextIntoChunks(text string, chunkSize int, maxChunks int) []string {
+	if count := countWords(text); count > maxChunks*chunkSize {
+		chunkSize = count / maxChunks
+	}
+
 	splitResult := splitTextWithDelimiters(text)
 	words := flattenSplitResult(splitResult)
 	var chunks []string

@@ -9,3 +9,4 @@ mistral_ai:
   base_url: https://api.mistral.ai
   completions_url: /v1/chat/completions
   words_in_chunk: 20
+  max_chunks: 2

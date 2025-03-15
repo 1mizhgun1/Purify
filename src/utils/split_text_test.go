@@ -12,8 +12,7 @@ func TestSplitTextIntoChunks(t *testing.T) {
 		"Этот текст может быть \t\n очень большим и содержать множество пробелов, отступов и переносов строк. " +
 		"Таким образом, важно сохранить    \n   \t\t  все эти элементы при разделении   и последующей склейке текста обратно."
 
-	chunkSize := 30
-	chunks := SplitTextIntoChunks(text, chunkSize)
+	chunks := SplitTextIntoChunks(text, 30, 4)
 
 	require.Equal(t, text, strings.Join(chunks, ""))
 }
