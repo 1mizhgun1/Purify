@@ -42,8 +42,6 @@ func sendMistralAIRequest(prompt string, cfg config.MistralAIConfig) (string, er
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("[DEBUG] " + string(respBody))
-
 	var result MistralAIResponse
 	if err = json.Unmarshal(respBody, &result); err != nil {
 		return "", errors.Wrap(err, "failed to unmarshal response body")

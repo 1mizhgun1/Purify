@@ -51,7 +51,7 @@ func main() {
 	// handlers will be there
 	r.Handle("/ping", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("pong")) }))
 
-	r.Handle("/ask_mistral_ai", http.HandlerFunc(mistralAI.Ask)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/analyze_text", http.HandlerFunc(mistralAI.AnalyzeText)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)
 	server := http.Server{

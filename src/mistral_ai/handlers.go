@@ -2,6 +2,7 @@ package mistral_ai
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"purify/src/config"
@@ -16,32 +17,47 @@ func NewMistralAI(cfg config.MistralAIConfig) *MistralAI {
 	return &MistralAI{cfg: cfg}
 }
 
-type AskRequest struct {
+type AnalyzeTextRequest struct {
 	Text string `json:"text"`
 }
 
-type AskResponse struct {
-	Response string `json:"response"`
+type AnalyzeTextResponse struct {
+	Response []TextPart `json:"response"`
 }
 
-func (m *MistralAI) Ask(w http.ResponseWriter, r *http.Request) {
+type TextPart struct {
+	Text  string `json:"text"`
+	State int    `json:"state"`
+}
+
+func (m *MistralAI) AnalyzeText(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var req AskRequest
+	var req AnalyzeTextRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrUnmarshalRequest)
 		http.Error(w, utils.Invalid, http.StatusBadRequest)
 		return
 	}
 
-	result, err := sendMistralAIRequest(req.Text, m.cfg)
+	prompt := fmt.Sprintf(analyzePromptTemplate, req.Text)
+	resultMessage, err := sendMistralAIRequest(prompt, m.cfg)
 	if err != nil {
 		utils.LogError(ctx, err, "sendMistralAIRequest error")
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
 		return
 	}
 
-	resp := AskResponse{Response: result}
+	fmt.Println("[DEBUG] resultMessage = " + resultMessage)
+
+	var textParts []TextPart
+	if err = json.Unmarshal([]byte(resultMessage), &textParts); err != nil {
+		utils.LogError(ctx, err, "incorrect response format from MistralAI")
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
+	}
+
+	resp := AnalyzeTextResponse{Response: textParts}
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		utils.LogError(r.Context(), err, utils.MsgErrMarshalResponse)
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
