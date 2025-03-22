@@ -13,6 +13,7 @@
    FRONTEND_HOST_NAME=*
    
    MISTRAL_AI_API_KEY=some_key
+   CHATGPT_API_KEY=some_key
     ```
 
 2. При первом запуске выполнить команду:
