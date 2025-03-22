@@ -48,10 +48,10 @@ func main() {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
-	// handlers will be there
 	r.Handle("/ping", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("pong")) }))
 
 	r.Handle("/analyze_text", http.HandlerFunc(mistralAI.AnalyzeText)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/replace_text", http.HandlerFunc(mistralAI.ReplaceText)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)
 	server := http.Server{
