@@ -16,6 +16,7 @@ const LoggerContextKey LoggerKey = "logger"
 type Config struct {
 	Main      MainConfig      `yaml:"main"`
 	MistralAI MistralAIConfig `yaml:"mistral_ai"`
+	ChatGPT   ChatGPTConfig   `yaml:"chat_gpt"`
 }
 
 type MainConfig struct {
@@ -32,6 +33,12 @@ type MistralAIConfig struct {
 	CompletionsURL string `yaml:"completions_url"`
 	WordsInChunk   int    `yaml:"words_in_chunk"`
 	MaxChunks      int    `yaml:"max_chunks"`
+}
+
+type ChatGPTConfig struct {
+	BaseURL        string `yaml:"base_url"`
+	CompletionsURL string `yaml:"completions_url"`
+	Model          string `yaml:"model"`
 }
 
 func MustLoadConfig(path string, logger *slog.Logger) *Config {

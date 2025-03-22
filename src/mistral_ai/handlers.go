@@ -22,35 +22,6 @@ func NewMistralAI(cfg config.MistralAIConfig) *MistralAI {
 	return &MistralAI{cfg: cfg}
 }
 
-// =====================================================================================================================
-// [begin] replace text
-
-type ReplaceTextRequest struct{}
-
-type ReplaceTextResponse struct{}
-
-func (m *MistralAI) ReplaceText(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	var req ReplaceTextRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		utils.LogError(ctx, err, utils.MsgErrUnmarshalRequest)
-		http.Error(w, utils.Invalid, http.StatusBadRequest)
-		return
-	}
-
-	resp := ReplaceTextResponse{}
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		utils.LogError(r.Context(), err, utils.MsgErrMarshalResponse)
-		http.Error(w, utils.Internal, http.StatusInternalServerError)
-		return
-	}
-}
-
-// [end] replace text
-// =====================================================================================================================
-// [begin] analyze text
-
 type AnalyzeTextRequest struct {
 	Text string `json:"text"`
 }
@@ -166,6 +137,3 @@ func joinResponses(responses []ChunkInChannel) []TextPart {
 
 	return result
 }
-
-// [end] analyze text
-// =====================================================================================================================

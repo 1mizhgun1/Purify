@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
+	"purify/src/chatgpt"
 	"purify/src/config"
 	"purify/src/middleware"
 	"purify/src/mistral_ai"
@@ -38,6 +39,7 @@ func main() {
 	logger.Info("Config file loaded")
 
 	mistralAI := mistral_ai.NewMistralAI(cfg.MistralAI)
+	chatGPT := chatgpt.NewChatGPT(cfg.ChatGPT)
 
 	reqIDMiddleware := middleware.CreateRequestIDMiddleware(logger)
 
@@ -51,7 +53,7 @@ func main() {
 	r.Handle("/ping", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("pong")) }))
 
 	r.Handle("/analyze_text", http.HandlerFunc(mistralAI.AnalyzeText)).Methods(http.MethodPost, http.MethodOptions)
-	r.Handle("/replace_text", http.HandlerFunc(mistralAI.ReplaceText)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/replace_text", http.HandlerFunc(chatGPT.ReplaceText)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)
 	server := http.Server{

@@ -10,7 +10,7 @@
    MAIN_LOG_FILE=${LOG_DIRECTORY}/main.log
    CONFIG_FILE=src/config/config.yaml
    
-   FRONTEND_HOST_NAME=http://localhost:3000
+   FRONTEND_HOST_NAME=*
    
    MISTRAL_AI_API_KEY=some_key
     ```
