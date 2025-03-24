@@ -186,3 +186,5 @@ cython_debug/
 .pypirc
 
 docs/
+
+docker-compose.dev.yml
