@@ -14,17 +14,35 @@
    
    MISTRAL_AI_API_KEY=some_key
    CHATGPT_API_KEY=some_key
+   
+   REDIS_DATA_DIRECTORY=/var/purify_redis_data
+   REDIS_PASSWORD=some_password
+   REDIS_URL=redis://default:${REDIS_PASSWORD}@redis:6379/0?protocol=3
     ```
 
-2. При первом запуске выполнить команду:
+2. При первом запуске выполнить команды:
 
    ```shell
    sudo mkdir -p /var/log/purify
+   sudo mkdir -p /var/purify_redis_data
    ```
    
-   Директория для лог файла должна совпадать с `LOG_DIRECTORY` из `.env`.
+   Директория должны совпадать с `LOG_DIRECTORY` и `REDIS_DATA_DIRECTORY` из `.env`.
 
-3. Собрать и запустить проект:
+3. При первом запуске создать в корне проекта redis.conf с таким содержимым:
+
+   ```conf
+   save 10 1
+   appendonly yes
+   appendfsync everysec
+   dir /data
+   dbfilename dump.rdb
+   requirepass some_password
+   ```
+   
+   Где `some_password` заменить на пароль из `env` переменной `REDIS_PASSWORD`
+
+4. Собрать и запустить проект:
 
     ```shell
     docker-compose build
@@ -44,7 +62,7 @@
     docker logs main
     ```
    
-4. Убедиться, что всё работает:
+5. Убедиться, что всё работает:
 
    ```shell
    curl http://127.0.0.1:8080/api/v1/ping
@@ -64,7 +82,7 @@
    }
    ```
 
-5. Первоначальный классификатор ```(Baseline решение):``` [тык](purify_ml/ml_classifier_app)
+6. Первоначальный классификатор ```(Baseline решение):``` [тык](purify_ml/ml_classifier_app)
    
 ## Наш оберег
 

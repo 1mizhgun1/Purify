@@ -16,3 +16,5 @@ go.work
 .env
 
 some.txt
+
+redis.conf
