@@ -18,6 +18,25 @@ services:
         source: ${LOG_DIRECTORY}
         target: /var/log/purify
 
+  nlp:
+    container_name: nlp
+    build:
+      context: .
+      dockerfile: ./nlp_words_app/Dockerfile
+    depends_on:
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./nlp_words_app:/app
+    command: [ "python", "app.py" ]
+
   redis:
     image: redis:latest
     container_name: redis
