@@ -1,11 +1,17 @@
 package chatgpt
 
 import (
+	"context"
 	"encoding/json"
+	goerrors "errors"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/pkg/errors"
+	"purify/src/cache"
 	"purify/src/config"
 	"purify/src/utils"
 )
@@ -17,11 +23,12 @@ var (
 )
 
 type ChatGPT struct {
-	cfg config.ChatGPTConfig
+	cfg   config.ChatGPTConfig
+	cache *cache.Cache
 }
 
-func NewChatGPT(cfg config.ChatGPTConfig) *ChatGPT {
-	return &ChatGPT{cfg: cfg}
+func NewChatGPT(cfg config.ChatGPTConfig, cache *cache.Cache) *ChatGPT {
+	return &ChatGPT{cfg: cfg, cache: cache}
 }
 
 type BlurRequest struct {
@@ -60,27 +67,107 @@ func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prompt := fmt.Sprintf(promptFormat, req.Text)
+	chunks := utils.SplitTextIntoChunks(req.Text, c.cfg.WordsInChunk, c.cfg.MaxChunks)
+
+	wg := &sync.WaitGroup{}
+	responsesCh := make(chan ChunkInChannel)
+	errorsCh := make(chan error)
+
+	for i, chunk := range chunks {
+		wg.Add(1)
+		time.Sleep(time.Millisecond)
+		go c.sendChunkRequest(ctx, promptFormat, chunk, i, wg, responsesCh, errorsCh)
+	}
+
+	go func() {
+		wg.Wait()
+		close(responsesCh)
+		close(errorsCh)
+	}()
+
+	chunkResponses := make([]ChunkInChannel, 0)
+	chunkErrors := make([]error, 0)
+
+	for {
+		select {
+		case response, ok := <-responsesCh:
+			if !ok {
+				goto end
+			}
+			chunkResponses = append(chunkResponses, response)
+		case err, ok := <-errorsCh:
+			if !ok {
+				continue
+			}
+			chunkErrors = append(chunkErrors, err)
+		}
+	}
+
+end:
+	resp := joinResponses(chunkResponses)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
+	}
+}
+
+type ChunkInChannel struct {
+	Index int
+	BlurResponse
+}
+
+func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannel, errorsCh chan<- error) {
+	defer wg.Done()
+
+	answerFromCache, err := c.cache.GetAnswer(ctx, chunk)
+	if err != nil {
+		if !goerrors.Is(err, cache.ErrNoAnswer) {
+			errorsCh <- errors.Wrapf(err, "failed to get answer from cache, index=%d", index)
+		} else {
+			fmt.Printf("[DEBUG] no answer in cache, index=%d\n", index)
+		}
+	} else {
+		fmt.Printf("[DEBUG] answer from cache, index=%d\n]", index)
+		responses <- ChunkInChannel{Index: index, BlurResponse: BlurResponse{
+			Preconception: answerFromCache.Preconception,
+			Agitation:     answerFromCache.Agitation,
+		}}
+		return
+	}
+
+	prompt := fmt.Sprintf(promptFormat, chunk)
 	answer, err := sendRequest(prompt, c.cfg)
 	if err != nil {
-		utils.LogError(ctx, err, "sendRequest error")
-		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		errorsCh <- errors.Wrapf(err, "failed to send chunk request, index=%d", index)
 		return
 	}
 
 	answer = strings.TrimPrefix(answer, "```")
 	answer = strings.TrimPrefix(answer, "json")
 	answer = strings.TrimSuffix(answer, "```")
-	resp := BlurResponse{Preconception: make([]string, 0), Agitation: make([]string, 0)}
+
+	fmt.Printf("[DEBUG] i=%d answer=%s\n", index, answer)
+
+	var resp BlurResponse
 	if err = json.Unmarshal([]byte(answer), &resp); err != nil {
-		utils.LogError(ctx, err, "invalid response format from ChatGPT")
-		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		errorsCh <- errors.Wrapf(err, "failed to unmarshal chunk response, index=%d", index)
 		return
 	}
 
-	if err = json.NewEncoder(w).Encode(resp); err != nil {
-		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
-		http.Error(w, utils.Internal, http.StatusInternalServerError)
-		return
+	responses <- ChunkInChannel{Index: index, BlurResponse: resp}
+
+	if err = c.cache.SetAnswer(ctx, chunk, cache.Value{Preconception: resp.Preconception, Agitation: resp.Agitation}); err != nil {
+		errorsCh <- errors.Wrapf(err, "failed to set answer in cache, index=%d", index)
 	}
+}
+
+func joinResponses(responses []ChunkInChannel) BlurResponse {
+	resp := BlurResponse{Preconception: make([]string, 0), Agitation: make([]string, 0)}
+	for _, response := range responses {
+		resp.Preconception = append(resp.Preconception, response.BlurResponse.Preconception...)
+		resp.Agitation = append(resp.Agitation, response.BlurResponse.Agitation...)
+	}
+
+	return resp
 }

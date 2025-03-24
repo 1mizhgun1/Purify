@@ -15,6 +15,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
+	"purify/src/cache"
 	"purify/src/chatgpt"
 	"purify/src/config"
 	"purify/src/middleware"
@@ -52,8 +53,10 @@ func main() {
 	}
 	logger.Info("Redis connected")
 
+	redisCache := cache.NewCache(redisClient)
+
 	mistralAI := mistral_ai.NewMistralAI(cfg.MistralAI)
-	chatGPT := chatgpt.NewChatGPT(cfg.ChatGPT)
+	chatGPT := chatgpt.NewChatGPT(cfg.ChatGPT, redisCache)
 
 	reqIDMiddleware := middleware.CreateRequestIDMiddleware(logger)
 

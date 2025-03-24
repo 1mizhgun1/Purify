@@ -39,6 +39,8 @@ type ChatGPTConfig struct {
 	BaseURL        string `yaml:"base_url"`
 	CompletionsURL string `yaml:"completions_url"`
 	Model          string `yaml:"model"`
+	WordsInChunk   int    `yaml:"words_in_chunk"`
+	MaxChunks      int    `yaml:"max_chunks"`
 }
 
 func MustLoadConfig(path string, logger *slog.Logger) *Config {
