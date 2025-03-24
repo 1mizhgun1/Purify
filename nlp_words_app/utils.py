@@ -58,8 +58,9 @@ def get_negative_words(text):
             if tag == 'NGTV':
                 negative_words.add(word)
         else:
-            lemma = checker.correct_spelling(word)
-            print(lemma)
+            corrected_word = checker.correct_spelling(word)
+            if corrected_word is not None:
+                lemma = get_lemma(corrected_word)
             if lemma in term_to_tag_dict:
                 tag = term_to_tag_dict[lemma]
                 word_cache[word] = tag

@@ -14,3 +14,5 @@ go.work
 .vscode
 
 .env
+
+some.txt
