@@ -1,0 +1,5 @@
+pandas==2.2.3
+nltk==3.9.1
+pymorphy3==2.0.3
+python-Levenshtein==0.27.1
+Flask==3.1.0
