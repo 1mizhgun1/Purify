@@ -53,7 +53,7 @@ func main() {
 	r.Handle("/ping", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("pong")) }))
 
 	r.Handle("/analyze_text", http.HandlerFunc(mistralAI.AnalyzeText)).Methods(http.MethodPost, http.MethodOptions)
-	r.Handle("/replace_text", http.HandlerFunc(chatGPT.ReplaceText)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/blur", http.HandlerFunc(chatGPT.Blur)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)
 	server := http.Server{
