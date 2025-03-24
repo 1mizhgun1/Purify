@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 	"purify/src/chatgpt"
 	"purify/src/config"
 	"purify/src/middleware"
@@ -37,6 +38,19 @@ func main() {
 
 	cfg := config.MustLoadConfig(os.Getenv("CONFIG_FILE"), logger)
 	logger.Info("Config file loaded")
+
+	redisOpts, err := redis.ParseURL(os.Getenv("REDIS_URL"))
+	if err != nil {
+		logger.Error(errors.Wrap(err, "failed to parse redis url").Error())
+		return
+	}
+	redisClient := redis.NewClient(redisOpts)
+
+	if err = redisClient.Ping(context.Background()).Err(); err != nil {
+		logger.Error(errors.Wrap(err, "failed to ping redis").Error())
+		return
+	}
+	logger.Info("Redis connected")
 
 	mistralAI := mistral_ai.NewMistralAI(cfg.MistralAI)
 	chatGPT := chatgpt.NewChatGPT(cfg.ChatGPT)
