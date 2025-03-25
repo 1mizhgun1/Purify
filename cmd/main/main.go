@@ -11,15 +11,16 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/gorilla/mux"
-	"github.com/joho/godotenv"
-	"github.com/pkg/errors"
-	"github.com/redis/go-redis/v9"
 	"purify/src/cache"
 	"purify/src/chatgpt"
 	"purify/src/config"
 	"purify/src/middleware"
 	"purify/src/mistral_ai"
+
+	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
+	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 )
 
 func init() {
@@ -71,6 +72,7 @@ func main() {
 
 	r.Handle("/analyze_text", http.HandlerFunc(mistralAI.AnalyzeText)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/blur", http.HandlerFunc(chatGPT.Blur)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/replace", http.HandlerFunc(chatGPT.Replace)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)
 	server := http.Server{

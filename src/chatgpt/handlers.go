@@ -10,16 +10,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"purify/src/cache"
 	"purify/src/config"
 	"purify/src/utils"
+
+	"github.com/pkg/errors"
 )
 
 var (
-	blurPreconceptionPrompt = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость. Результат представь в виде json, формат такой: {\\\"preconception\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
-	blurAgitationPrompt     = "Найди в тексте все слова, словосочетания и предложения, которые содержат агитацию. Результат представь в виде json, формат такой: {\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
-	blurAllPrompt           = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость или агитацию. Результат представь в виде json, содержащего два массива строк, формат такой: {\\\"preconception\\\":[],\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
+	blurPreconceptionPrompt   = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость. Результат представь в виде json, формат такой: {\\\"preconception\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
+	blurAgitationPrompt       = "Найди в тексте все слова, словосочетания и предложения, которые содержат негативную агитацию. Результат представь в виде json, формат такой: {\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
+	blurAllPrompt             = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость или негативную агитацию. Результат представь в виде json, содержащего два массива строк, формат такой: {\\\"preconception\\\":[],\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
+	changePreconceptionPrompt = "Найди в тексте негативную предвзятость и сделай и текст нейтральными. Результат представь в виде json, формат такой: {\\\"preconception\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст: %s"
+	changeAgitationPrompt     = "Найди в тексте негативную агитацию и сделай текст нейтральными. Результат представь в виде json, формат такой: {\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст: %s"
+	changeAllPrompt           = "Найди в тексте негативные предвзятость или агитацию и сделай текст нейтральными. Результат представь в виде json, содержащего два массива строк, формат такой: {\\\"preconception\\\":[],\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст: %s"
 )
 
 type ChatGPT struct {
@@ -37,9 +41,20 @@ type BlurRequest struct {
 	Agitation     bool   `json:"agitation"`
 }
 
+type ChangeRequest struct {
+	Text          string `json:"text"`
+	Preconception bool   `json:"preconception"`
+	Agitation     bool   `json:"agitation"`
+}
+
 type BlurResponse struct {
 	Preconception []string `json:"preconception"`
 	Agitation     []string `json:"agitation"`
+}
+
+type ChangeResponse struct {
+	Preconception string `json:"preconception"`
+	Agitation     string `json:"agitation"`
 }
 
 func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
@@ -170,4 +185,54 @@ func joinResponses(responses []ChunkInChannel) BlurResponse {
 	}
 
 	return resp
+}
+
+func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req ChangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError(ctx, err, utils.MsgErrUnmarshalRequest)
+		http.Error(w, utils.Invalid, http.StatusBadRequest)
+		return
+	}
+
+	var promptFormat string
+	if req.Preconception && req.Agitation {
+		promptFormat = changeAllPrompt
+	} else if req.Preconception {
+		promptFormat = changePreconceptionPrompt
+	} else if req.Agitation {
+		promptFormat = changeAgitationPrompt
+	} else {
+		if err := json.NewEncoder(w).Encode(BlurResponse{}); err != nil {
+			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+			http.Error(w, utils.Internal, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	answer, err := sendRequest(promptFormat, c.cfg)
+	if err != nil {
+		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
+	}
+
+	answer = strings.TrimPrefix(answer, "```")
+	answer = strings.TrimPrefix(answer, "json")
+	answer = strings.TrimSuffix(answer, "```")
+
+	var resp ChangeResponse
+	if err = json.Unmarshal([]byte(answer), &resp); err != nil {
+		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
+	}
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
+	}
 }
