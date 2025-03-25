@@ -50,7 +50,6 @@ def get_lemma(word):
     cache_key = f"{LEMMA_PREFIX}{word}"
     cached = cache_get(cache_key)
     if cached is not None:
-        print(f"{cached}: {cache_key}")
         return cached
     
     lemma = lemmatizer.parse(word)[0].normal_form
@@ -62,7 +61,6 @@ def is_material_word(word):
     cache_key = f"{MAT_WORD_PREFIX}{word}"
     cached = cache_get(cache_key)
     if cached is not None:
-        print(f"{cached}: {cache_key}")
         return cached
     
     is_mat = bool(re.fullmatch(mat_regex, word, flags=re.VERBOSE))
@@ -74,7 +72,6 @@ def get_word_tag(word, lemma):
     word_cache_key = f"{WORD_TAG_PREFIX}word:{word}"
     cached_tag = cache_get(word_cache_key)
     if cached_tag is not None:
-        print(f"{cached_tag}: {word_cache_key}")
         return cached_tag
     
     lemma_cache_key = f"{WORD_TAG_PREFIX}lemma:{lemma}"
