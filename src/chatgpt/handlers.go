@@ -47,19 +47,9 @@ type BlurRequest struct {
 	Agitation     bool   `json:"agitation"`
 }
 
-type ChangeRequest struct {
-	Text          string `json:"text"`
-	Preconception bool   `json:"preconception"`
-	Agitation     bool   `json:"agitation"`
-}
-
 type BlurResponse struct {
 	Preconception []string `json:"preconception"`
 	Agitation     []string `json:"agitation"`
-}
-
-type ChangeResponse struct {
-	Result []Replacement `json:"result"`
 }
 
 type Replacement struct {
@@ -206,10 +196,33 @@ func joinResponses(responses []ChunkInChannel) BlurResponse {
 	return resp
 }
 
+// BLUR ZONE
+// =====================================================================================================================
+// REPLACE ZONE
+
+type ReplaceRequest struct {
+	Text          string `json:"text"`
+	Preconception bool   `json:"preconception"`
+	Agitation     bool   `json:"agitation"`
+}
+
+type ReplaceResponse struct {
+	Blocks []Block `json:"blocks"`
+}
+
+type Block struct {
+	Text string `json:"text"`
+	ReplaceResponseGPT
+}
+
+type ReplaceResponseGPT struct {
+	Result []Replacement `json:"result"`
+}
+
 func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var req ChangeRequest
+	var req ReplaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrUnmarshalRequest)
 		http.Error(w, utils.Invalid, http.StatusBadRequest)
@@ -248,8 +261,20 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 			fmt.Printf("[DEBUG] no answer in cache\n")
 		}
 	} else {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(answerFromCacheString))
+		var answerFromCache ReplaceResponseGPT
+		if err = json.Unmarshal([]byte(answerFromCacheString), &answerFromCache); err != nil {
+			utils.LogError(ctx, err, "invalid answer format from cache")
+			http.Error(w, utils.Internal, http.StatusInternalServerError)
+			return
+		}
+
+		resp := ReplaceResponse{Blocks: []Block{{Text: req.Text, ReplaceResponseGPT: answerFromCache}}}
+		if err = json.NewEncoder(w).Encode(resp); err != nil {
+			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+			http.Error(w, utils.Internal, http.StatusInternalServerError)
+			return
+		}
+
 		return
 	}
 
@@ -264,20 +289,20 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 	answer = strings.TrimPrefix(answer, "json")
 	answer = strings.TrimSuffix(answer, "```")
 
-	var resp ChangeResponse
-	if err = json.Unmarshal([]byte(answer), &resp.Result); err != nil {
+	var respGPT ReplaceResponseGPT
+	if err = json.Unmarshal([]byte(answer), &respGPT.Result); err != nil {
 		utils.LogError(ctx, err, "invalid answer format from ChatGPT")
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
 		return
 	}
 
 	if requestType != 0 {
-		for i := range resp.Result {
-			resp.Result[i].Type = requestType
+		for i := range respGPT.Result {
+			respGPT.Result[i].Type = requestType
 		}
 	}
 
-	toCache, err := json.Marshal(resp)
+	toCache, err := json.Marshal(respGPT)
 	if err != nil {
 		utils.LogError(ctx, err, "failed to marshal answer")
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
@@ -289,6 +314,7 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	resp := ReplaceResponse{Blocks: []Block{{Text: req.Text, ReplaceResponseGPT: respGPT}}}
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
