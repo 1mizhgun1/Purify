@@ -27,9 +27,9 @@ var (
 	blurAgitationPrompt     = "Найди в тексте все слова, словосочетания и предложения, которые содержат негативную агитацию. Результат представь в виде json, формат такой: {\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
 	blurAllPrompt           = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость или негативную агитацию. Результат представь в виде json, содержащего два массива строк, формат такой: {\\\"preconception\\\":[],\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
 
-	changePreconceptionPrompt = "Найди в тексте негативную предвзятость и скажи, на что её исправить. Все остальные негативные моменты, не связанные с предвзятостью, исправлять не нужно. Если в тексте нет предвзятости, то не нужно исправлять ничего. В ответе напиши только результат, что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\"}] Текст: %s"
-	changeAgitationPrompt     = "Найди в тексте негативную агитацию и скажи, на что её исправить. Все остальные негативные моменты, не связанные с агитацией, исправлять не нужно. Если в тексте нет агитации, то не нужно исправлять ничего. В ответе напиши только результат, что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\"}] Текст: %s"
-	changeAllPrompt           = "Найди в тексте негативную предвзятость и негативную агитацию и скажи, на что их исправить. Все остальные негативные моменты, не связанные с предвзятостью или агитацией, исправлять не нужно. Если в тексте нет предвзятости и агитации, то не нужно исправлять ничего. В ответе напиши только результат что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\",\\\"type\\\":1}] где type=1 - замена предвзятости, type=2 - замена агитации Текст: %s"
+	changePreconceptionPrompt = "Найди в тексте негативную предвзятость и скажи, на что её исправить. При этом не нужно менять смысл на положительный, нужно лишь сгладить негатив. Все остальные негативные моменты, не связанные с предвзятостью, исправлять не нужно. Если в тексте нет предвзятости, то не нужно исправлять ничего. В ответе напиши только результат, что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\"}] Текст: %s"
+	changeAgitationPrompt     = "Найди в тексте негативную агитацию и скажи, на что её исправить. При этом не нужно менять смысл на положительный, нужно лишь сгладить негатив. Все остальные негативные моменты, не связанные с агитацией, исправлять не нужно. Если в тексте нет агитации, то не нужно исправлять ничего. В ответе напиши только результат, что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\"}] Текст: %s"
+	changeAllPrompt           = "Найди в тексте негативную предвзятость и негативную агитацию и скажи, на что их исправить. При этом не нужно менять смысл на положительный, нужно лишь сгладить негатив. Все остальные негативные моменты, не связанные с предвзятостью или агитацией, исправлять не нужно. Если в тексте нет предвзятости и агитации, то не нужно исправлять ничего. В ответе напиши только результат что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\",\\\"type\\\":1}] где type=1 - замена предвзятости, type=2 - замена агитации Текст: %s"
 )
 
 type ChatGPT struct {
@@ -68,13 +68,18 @@ func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 0 - оба параметра, 1 - предвзятость, 2 - агитация
+	requestType := 0
+
 	var promptFormat string
 	if req.Preconception && req.Agitation {
 		promptFormat = blurAllPrompt
 	} else if req.Preconception {
 		promptFormat = blurPreconceptionPrompt
+		requestType = 1
 	} else if req.Agitation {
 		promptFormat = blurAgitationPrompt
+		requestType = 2
 	} else {
 		if err := json.NewEncoder(w).Encode(BlurResponse{}); err != nil {
 			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
@@ -92,7 +97,7 @@ func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
 	for i, chunk := range chunks {
 		wg.Add(1)
 		time.Sleep(time.Millisecond)
-		go c.sendChunkRequestBlur(ctx, promptFormat, chunk, i, wg, responsesCh, errorsCh)
+		go c.sendChunkRequestBlur(ctx, promptFormat, requestType, chunk, i, wg, responsesCh, errorsCh)
 	}
 
 	go func() {
@@ -133,10 +138,10 @@ type ChunkInChannelBlur struct {
 	BlurResponse
 }
 
-func (c *ChatGPT) sendChunkRequestBlur(ctx context.Context, promptFormat string, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelBlur, errorsCh chan<- error) {
+func (c *ChatGPT) sendChunkRequestBlur(ctx context.Context, promptFormat string, requestType int, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelBlur, errorsCh chan<- error) {
 	defer wg.Done()
 
-	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, featureBlur)
+	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, fmt.Sprintf("%s%d", featureBlur, requestType))
 	if err != nil {
 		if !goerrors.Is(err, cache.ErrNoAnswer) {
 			errorsCh <- errors.Wrapf(err, "failed to get answer from cache, index=%d", index)
@@ -181,7 +186,7 @@ func (c *ChatGPT) sendChunkRequestBlur(ctx context.Context, promptFormat string,
 		errorsCh <- errors.Wrapf(err, "failed to marshal chunk response, index=%d", index)
 	}
 
-	if err = c.cache.SetAnswer(ctx, chunk, string(respBytes), featureBlur); err != nil {
+	if err = c.cache.SetAnswer(ctx, chunk, string(respBytes), fmt.Sprintf("%s%d", featureBlur, requestType)); err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to set answer in cache, index=%d", index)
 	}
 }
@@ -201,9 +206,9 @@ func joinResponsesBlur(responses []ChunkInChannelBlur) BlurResponse {
 // REPLACE ZONE
 
 type ReplaceRequest struct {
-	Text          string `json:"text"`
-	Preconception bool   `json:"preconception"`
-	Agitation     bool   `json:"agitation"`
+	Blocks        []string `json:"blocks"`
+	Preconception bool     `json:"preconception"`
+	Agitation     bool     `json:"agitation"`
 }
 
 type ReplaceResponse struct {
@@ -242,14 +247,19 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 		promptFormat = changeAgitationPrompt
 		requestType = 2
 	} else {
-		if err := json.NewEncoder(w).Encode(ReplaceResponse{}); err != nil {
+		resp := ReplaceResponse{Blocks: make([]Block, 0)}
+		for _, block := range req.Blocks {
+			resp.Blocks = append(resp.Blocks, Block{Text: block, ReplaceResponseGPT: ReplaceResponseGPT{Result: make([]Replacement, 0)}})
+		}
+
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
 			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 			http.Error(w, utils.Internal, http.StatusInternalServerError)
 		}
 		return
 	}
 
-	chunks := utils.SplitTextIntoChunks(req.Text, c.cfg.WordsInChunk, c.cfg.MaxChunks)
+	chunks := utils.SplitBlocksIntoChunks(req.Blocks, c.cfg.MaxTokensInChunk)
 
 	wg := &sync.WaitGroup{}
 	responsesCh := make(chan ChunkInChannelReplace)
@@ -288,7 +298,19 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 end:
 	fmt.Printf("[DEBUG] chunkErrors: %v\n", chunkErrors)
 
-	resp := ReplaceResponse{Blocks: []Block{{Text: req.Text, ReplaceResponseGPT: joinResponsesReplace(chunkResponses)}}}
+	allResponses := joinResponsesReplace(chunkResponses)
+
+	resp := ReplaceResponse{Blocks: make([]Block, 0)}
+	for _, block := range req.Blocks {
+		found := make([]Replacement, 0)
+		for _, replacement := range allResponses.Result {
+			if strings.Contains(block, replacement.From) {
+				found = append(found, replacement)
+			}
+		}
+		resp.Blocks = append(resp.Blocks, Block{Text: block, ReplaceResponseGPT: ReplaceResponseGPT{Result: found}})
+	}
+
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
@@ -304,7 +326,7 @@ type ChunkInChannelReplace struct {
 func (c *ChatGPT) sendChunkRequestReplace(ctx context.Context, promptFormat string, requestType int, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelReplace, errorsCh chan<- error) {
 	defer wg.Done()
 
-	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, featureReplace)
+	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, fmt.Sprintf("%s%d", featureReplace, requestType))
 	if err != nil {
 		if !goerrors.Is(err, cache.ErrNoAnswer) {
 			errorsCh <- errors.Wrapf(err, "failed to get answer from cache, index=%d", index)
@@ -354,7 +376,7 @@ func (c *ChatGPT) sendChunkRequestReplace(ctx context.Context, promptFormat stri
 		errorsCh <- errors.Wrapf(err, "failed to marshal chunk response, index=%d", index)
 	}
 
-	if err = c.cache.SetAnswer(ctx, chunk, string(respBytes), featureReplace); err != nil {
+	if err = c.cache.SetAnswer(ctx, chunk, string(respBytes), fmt.Sprintf("%s%d", featureReplace, requestType)); err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to set answer in cache, index=%d", index)
 	}
 }

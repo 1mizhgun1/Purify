@@ -36,11 +36,12 @@ type MistralAIConfig struct {
 }
 
 type ChatGPTConfig struct {
-	BaseURL        string `yaml:"base_url"`
-	CompletionsURL string `yaml:"completions_url"`
-	Model          string `yaml:"model"`
-	WordsInChunk   int    `yaml:"words_in_chunk"`
-	MaxChunks      int    `yaml:"max_chunks"`
+	BaseURL          string `yaml:"base_url"`
+	CompletionsURL   string `yaml:"completions_url"`
+	Model            string `yaml:"model"`
+	WordsInChunk     int    `yaml:"words_in_chunk"`      // for blur
+	MaxChunks        int    `yaml:"max_chunks"`          // for blur
+	MaxTokensInChunk int    `yaml:"max_tokens_in_chunk"` // for replace
 }
 
 func MustLoadConfig(path string, logger *slog.Logger) *Config {
