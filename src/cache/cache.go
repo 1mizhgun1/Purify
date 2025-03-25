@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"encoding/json"
 	goerrors "errors"
 	"fmt"
 
@@ -21,41 +20,24 @@ func NewCache(client *redis.Client) *Cache {
 	return &Cache{client: client}
 }
 
-type Value struct {
-	Preconception []string `json:"preconception"`
-	Agitation     []string `json:"agitation"`
-}
-
-func (c *Cache) GetAnswer(ctx context.Context, text string, feature string) (Value, error) {
+func (c *Cache) GetAnswer(ctx context.Context, text string, feature string) (string, error) {
 	key := utils.Hash(text)
-	fmt.Printf("[DEBUG] GetAnswer key=%s\n", key)
 
-	valueString, err := c.get(ctx, key, feature)
+	value, err := c.get(ctx, key, feature)
 	if err != nil {
 		if goerrors.Is(err, redis.Nil) {
-			return Value{}, ErrNoAnswer
+			return "", ErrNoAnswer
 		}
-		return Value{}, errors.Wrap(err, "failed to get answer")
-	}
-
-	var value Value
-	if err = json.Unmarshal([]byte(valueString), &value); err != nil {
-		return Value{}, errors.Wrap(err, "failed to unmarshal answer")
+		return "", errors.Wrap(err, "failed to get answer")
 	}
 
 	return value, nil
 }
 
-func (c *Cache) SetAnswer(ctx context.Context, text string, answer Value, feature string) error {
+func (c *Cache) SetAnswer(ctx context.Context, text string, answer string, feature string) error {
 	key := utils.Hash(text)
-	fmt.Printf("[DEBUG] SetAnswer key=%s\n", key)
 
-	valueBytes, err := json.Marshal(answer)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal value")
-	}
-
-	if err = c.set(ctx, key, string(valueBytes), feature); err != nil {
+	if err := c.set(ctx, key, answer, feature); err != nil {
 		return errors.Wrap(err, "failed to set value")
 	}
 

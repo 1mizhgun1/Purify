@@ -146,7 +146,7 @@ type ChunkInChannel struct {
 func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannel, errorsCh chan<- error) {
 	defer wg.Done()
 
-	answerFromCache, err := c.cache.GetAnswer(ctx, chunk, featureBlur)
+	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, featureBlur)
 	if err != nil {
 		if !goerrors.Is(err, cache.ErrNoAnswer) {
 			errorsCh <- errors.Wrapf(err, "failed to get answer from cache, index=%d", index)
@@ -155,10 +155,13 @@ func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chu
 		}
 	} else {
 		fmt.Printf("[DEBUG] answer from cache, index=%d\n]", index)
-		responses <- ChunkInChannel{Index: index, BlurResponse: BlurResponse{
-			Preconception: answerFromCache.Preconception,
-			Agitation:     answerFromCache.Agitation,
-		}}
+
+		var answerFromCache BlurResponse
+		if err = json.Unmarshal([]byte(answerFromCacheString), &answerFromCache); err != nil {
+			errorsCh <- errors.Wrapf(err, "failed to unmarshal answer from cache, index=%d", index)
+		}
+
+		responses <- ChunkInChannel{Index: index, BlurResponse: answerFromCache}
 		return
 	}
 
@@ -183,7 +186,12 @@ func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chu
 
 	responses <- ChunkInChannel{Index: index, BlurResponse: resp}
 
-	if err = c.cache.SetAnswer(ctx, chunk, cache.Value{Preconception: resp.Preconception, Agitation: resp.Agitation}, featureBlur); err != nil {
+	respBytes, err := json.Marshal(resp)
+	if err != nil {
+		errorsCh <- errors.Wrapf(err, "failed to marshal chunk response, index=%d", index)
+	}
+
+	if err = c.cache.SetAnswer(ctx, chunk, string(respBytes), featureBlur); err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to set answer in cache, index=%d", index)
 	}
 }
@@ -229,6 +237,22 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	prompt := fmt.Sprintf(promptFormat, req.Text)
+
+	answerFromCacheString, err := c.cache.GetAnswer(ctx, prompt, featureReplace)
+	if err != nil {
+		if !goerrors.Is(err, cache.ErrNoAnswer) {
+			utils.LogError(ctx, err, "failed to get answer from cache")
+			http.Error(w, utils.Internal, http.StatusInternalServerError)
+			return
+		} else {
+			fmt.Printf("[DEBUG] no answer in cache\n")
+		}
+	} else {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(answerFromCacheString))
+		return
+	}
+
 	answer, err := sendRequest(prompt, c.cfg)
 	if err != nil {
 		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
@@ -251,6 +275,18 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 		for i := range resp.Result {
 			resp.Result[i].Type = requestType
 		}
+	}
+
+	toCache, err := json.Marshal(resp)
+	if err != nil {
+		utils.LogError(ctx, err, "failed to marshal answer")
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
+	}
+	if err = c.cache.SetAnswer(ctx, prompt, string(toCache), featureReplace); err != nil {
+		utils.LogError(ctx, err, "failed to set answer in cache")
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
 	}
 
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
