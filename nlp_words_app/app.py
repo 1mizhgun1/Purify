@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from utils import *
-from flask_cors import CORS, cross_origin
+from flask_cors import CORS
 
 app = Flask(__name__)
 cors = CORS(app)
@@ -9,18 +9,18 @@ cors = CORS(app)
 def analyze_text():
     try:
         data = request.get_json()
-        text = data.get('text', '')
-        
-        if not text:
-            return jsonify({"error": "No text provided"}), 400
-        
-        negative_words = get_negative_words(text)
+        blocks = data.get('blocks', '')
 
-        return jsonify({
-            "status": "success",
-            "negative_words": negative_words,
-            "count": len(negative_words)
-        })
+        negative_blocks = []
+        for block in blocks:
+            negative_words = get_negative_words(block)
+            if len(list(negative_words)) > 0:
+                negative_blocks.append({
+                    "block": block,
+                    "negative_words": list(negative_words)
+                })
+
+        return jsonify(negative_blocks)
     
     except Exception as e:
         return jsonify({
