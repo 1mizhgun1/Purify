@@ -2,78 +2,76 @@ from config import *
 import re
 from functools import lru_cache
 import redis
-import pickle
 import os
-from logger_config import cache_logger
 
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")  
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 redis_client = redis.Redis.from_url(redis_url)
 
 LEMMA_PREFIX = "lemma:"
 WORD_TAG_PREFIX = "word_tag:"
 MAT_WORD_PREFIX = "mat_word:"
-
-def cache_lemma(word: str, lemma: str):
-    """Кэширование леммы"""
-    redis_client.setex(
-        f"{LEMMA_PREFIX}{word}",
-        time=86400,  
-        value=pickle.dumps(lemma)
-    )
-    # cache_logger.info(f"Cached lemma for word: {word}")
-
-def cache_get(key: str):
-    """Универсальное получение из кэша"""
-    # cache_logger.debug(f"Cache GET for key: {key}")
-    cached = redis_client.get(key)
-    return pickle.loads(cached) if cached else None
-
-def cache_set(key: str, value, ttl: int = 3600):
-    """Универсальное сохранение в кэш"""
-    # cache_logger.debug(f"Cache SET for key: {key}, TTL: {ttl}")
-    redis_client.setex(key, time=ttl, value=pickle.dumps(value))
+#
+# def cache_lemma(word: str, lemma: str):
+#     """Кэширование леммы"""
+#     redis_client.setex(
+#         f"{LEMMA_PREFIX}{word}",
+#         time=86400,
+#         value=pickle.dumps(lemma)
+#     )
+#     # cache_logger.info(f"Cached lemma for word: {word}")
+#
+# def cache_get(key: str):
+#     """Универсальное получение из кэша"""
+#     # cache_logger.debug(f"Cache GET for key: {key}")
+#     cached = redis_client.get(key)
+#     return pickle.loads(cached) if cached else None
+#
+# def cache_set(key: str, value, ttl: int = 3600):
+#     """Универсальное сохранение в кэш"""
+#     # cache_logger.debug(f"Cache SET for key: {key}, TTL: {ttl}")
+#     redis_client.setex(key, time=ttl, value=pickle.dumps(value))
 
 @lru_cache(maxsize=1000)
 def get_lemma(word):
-    cache_key = f"{LEMMA_PREFIX}{word}"
-    cached = cache_get(cache_key)
-    if cached:
-        cache_logger.debug(f"Cache GET for key: {cache_key}")
-        return cached
+    # cache_key = f"{LEMMA_PREFIX}{word}"
+    # cached = cache_get(cache_key)
+    # if cached:
+    #     cache_logger.debug(f"Cache GET for key: {cache_key}")
+    #     return cached
     
     lemma = lemmatizer.parse(word)[0].normal_form
-    cache_set(cache_key, lemma, ttl=86400)  
+    # cache_set(cache_key, lemma, ttl=86400)
     return lemma
 
 def is_material_word(word):
     """Проверка матерного слова с кэшированием"""
-    cache_key = f"{MAT_WORD_PREFIX}{word}"
-    cached = cache_get(cache_key)
-    if cached is not None:
-        cache_logger.debug(f"Cache GET for key: {cache_key}")
-        return cached
+    # cache_key = f"{MAT_WORD_PREFIX}{word}"
+    # cached = cache_get(cache_key)
+    # if cached is not None:
+    #     cache_logger.debug(f"Cache GET for key: {cache_key}")
+    #     return cached
     
     is_mat = bool(re.fullmatch(mat_regex, word, flags=re.VERBOSE))
-    cache_set(cache_key, is_mat, ttl=3600)
+    # cache_set(cache_key, is_mat, ttl=3600)
     return is_mat
 
 def get_word_tag(word, lemma):
     """Получение тега слова с кэшированием"""
-    word_cache_key = f"{WORD_TAG_PREFIX}word:{word}"
-    cached_tag = cache_get(word_cache_key)
-    if cached_tag:
-        cache_logger.debug(f"Cache GET for key: {word_cache_key}")
-        return cached_tag
+    # word_cache_key = f"{WORD_TAG_PREFIX}word:{word}"
+    # cached_tag = cache_get(word_cache_key)
+    # if cached_tag:
+    #     cache_logger.debug(f"Cache GET for key: {word_cache_key}")
+    #     return cached_tag
     
-    lemma_cache_key = f"{WORD_TAG_PREFIX}lemma:{lemma}"
-    cached_tag = cache_get(lemma_cache_key)
-    if cached_tag:
-        cache_set(word_cache_key, cached_tag)  
-        return cached_tag
+    # lemma_cache_key = f"{WORD_TAG_PREFIX}lemma:{lemma}"
+    # cached_tag = cache_get(lemma_cache_key)
+    # if cached_tag:
+    #     cache_set(word_cache_key, cached_tag)
+    #     return cached_tag
     
     tag = term_to_tag_dict.get(lemma, 'NEUT')
-    cache_set(word_cache_key, tag)
-    cache_set(lemma_cache_key, tag)
+    # cache_set(word_cache_key, tag)
+    # cache_set(lemma_cache_key, tag)
     return tag
 
 def clean_text(text):
@@ -101,7 +99,7 @@ def get_negative_words(text):
             continue
 
         if is_material_word(word) or word == "сука":
-            cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV")
+            # cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV")
             negative_words.add(word)
             continue
 

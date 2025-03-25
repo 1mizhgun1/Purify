@@ -1,10 +1,9 @@
 from flask import Flask, request, jsonify
-from config import *
 from utils import *
-from functools import lru_cache
-from collections import defaultdict
+from flask_cors import CORS, cross_origin
 
 app = Flask(__name__)
+cors = CORS(app)
 
 @app.route('/analyze', methods=['POST'])
 def analyze_text():
@@ -16,7 +15,7 @@ def analyze_text():
             return jsonify({"error": "No text provided"}), 400
         
         negative_words = get_negative_words(text)
-        
+
         return jsonify({
             "status": "success",
             "negative_words": negative_words,
