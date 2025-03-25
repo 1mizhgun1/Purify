@@ -86,13 +86,13 @@ func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
 	chunks := utils.SplitTextIntoChunks(req.Text, c.cfg.WordsInChunk, c.cfg.MaxChunks)
 
 	wg := &sync.WaitGroup{}
-	responsesCh := make(chan ChunkInChannel)
+	responsesCh := make(chan ChunkInChannelBlur)
 	errorsCh := make(chan error)
 
 	for i, chunk := range chunks {
 		wg.Add(1)
 		time.Sleep(time.Millisecond)
-		go c.sendChunkRequest(ctx, promptFormat, chunk, i, wg, responsesCh, errorsCh)
+		go c.sendChunkRequestBlur(ctx, promptFormat, chunk, i, wg, responsesCh, errorsCh)
 	}
 
 	go func() {
@@ -101,7 +101,7 @@ func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
 		close(errorsCh)
 	}()
 
-	chunkResponses := make([]ChunkInChannel, 0)
+	chunkResponses := make([]ChunkInChannelBlur, 0)
 	chunkErrors := make([]error, 0)
 
 	for {
@@ -120,7 +120,7 @@ func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
 	}
 
 end:
-	resp := joinResponses(chunkResponses)
+	resp := joinResponsesBlur(chunkResponses)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
@@ -128,12 +128,12 @@ end:
 	}
 }
 
-type ChunkInChannel struct {
+type ChunkInChannelBlur struct {
 	Index int
 	BlurResponse
 }
 
-func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannel, errorsCh chan<- error) {
+func (c *ChatGPT) sendChunkRequestBlur(ctx context.Context, promptFormat string, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelBlur, errorsCh chan<- error) {
 	defer wg.Done()
 
 	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, featureBlur)
@@ -151,7 +151,7 @@ func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chu
 			errorsCh <- errors.Wrapf(err, "failed to unmarshal answer from cache, index=%d", index)
 		}
 
-		responses <- ChunkInChannel{Index: index, BlurResponse: answerFromCache}
+		responses <- ChunkInChannelBlur{Index: index, BlurResponse: answerFromCache}
 		return
 	}
 
@@ -174,7 +174,7 @@ func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chu
 		return
 	}
 
-	responses <- ChunkInChannel{Index: index, BlurResponse: resp}
+	responses <- ChunkInChannelBlur{Index: index, BlurResponse: resp}
 
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
@@ -186,7 +186,7 @@ func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chu
 	}
 }
 
-func joinResponses(responses []ChunkInChannel) BlurResponse {
+func joinResponsesBlur(responses []ChunkInChannelBlur) BlurResponse {
 	resp := BlurResponse{Preconception: make([]string, 0), Agitation: make([]string, 0)}
 	for _, response := range responses {
 		resp.Preconception = append(resp.Preconception, response.BlurResponse.Preconception...)
@@ -242,46 +242,91 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 		promptFormat = changeAgitationPrompt
 		requestType = 2
 	} else {
-		if err := json.NewEncoder(w).Encode(BlurResponse{}); err != nil {
+		if err := json.NewEncoder(w).Encode(ReplaceResponse{}); err != nil {
 			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 			http.Error(w, utils.Internal, http.StatusInternalServerError)
 		}
 		return
 	}
 
-	prompt := fmt.Sprintf(promptFormat, req.Text)
+	chunks := utils.SplitTextIntoChunks(req.Text, c.cfg.WordsInChunk, c.cfg.MaxChunks)
 
-	answerFromCacheString, err := c.cache.GetAnswer(ctx, prompt, featureReplace)
-	if err != nil {
-		if !goerrors.Is(err, cache.ErrNoAnswer) {
-			utils.LogError(ctx, err, "failed to get answer from cache")
-			http.Error(w, utils.Internal, http.StatusInternalServerError)
-			return
-		} else {
-			fmt.Printf("[DEBUG] no answer in cache\n")
-		}
-	} else {
-		var answerFromCache ReplaceResponseGPT
-		if err = json.Unmarshal([]byte(answerFromCacheString), &answerFromCache); err != nil {
-			utils.LogError(ctx, err, "invalid answer format from cache")
-			http.Error(w, utils.Internal, http.StatusInternalServerError)
-			return
-		}
+	wg := &sync.WaitGroup{}
+	responsesCh := make(chan ChunkInChannelReplace)
+	errorsCh := make(chan error)
 
-		resp := ReplaceResponse{Blocks: []Block{{Text: req.Text, ReplaceResponseGPT: answerFromCache}}}
-		if err = json.NewEncoder(w).Encode(resp); err != nil {
-			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
-			http.Error(w, utils.Internal, http.StatusInternalServerError)
-			return
-		}
-
-		return
+	for i, chunk := range chunks {
+		wg.Add(1)
+		time.Sleep(time.Millisecond)
+		go c.sendChunkRequestReplace(ctx, promptFormat, requestType, chunk, i, wg, responsesCh, errorsCh)
 	}
 
-	answer, err := sendRequest(prompt, c.cfg)
-	if err != nil {
+	go func() {
+		wg.Wait()
+		close(responsesCh)
+		close(errorsCh)
+	}()
+
+	chunkResponses := make([]ChunkInChannelReplace, 0)
+	chunkErrors := make([]error, 0)
+
+	for {
+		select {
+		case response, ok := <-responsesCh:
+			if !ok {
+				goto end
+			}
+			chunkResponses = append(chunkResponses, response)
+		case err, ok := <-errorsCh:
+			if !ok {
+				continue
+			}
+			chunkErrors = append(chunkErrors, err)
+		}
+	}
+
+end:
+	fmt.Printf("[DEBUG] chunkErrors: %v\n", chunkErrors)
+
+	resp := ReplaceResponse{Blocks: []Block{{Text: req.Text, ReplaceResponseGPT: joinResponsesReplace(chunkResponses)}}}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
+	}
+}
+
+type ChunkInChannelReplace struct {
+	Index int
+	ReplaceResponseGPT
+}
+
+func (c *ChatGPT) sendChunkRequestReplace(ctx context.Context, promptFormat string, requestType int, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelReplace, errorsCh chan<- error) {
+	defer wg.Done()
+
+	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, featureReplace)
+	if err != nil {
+		if !goerrors.Is(err, cache.ErrNoAnswer) {
+			errorsCh <- errors.Wrapf(err, "failed to get answer from cache, index=%d", index)
+		} else {
+			fmt.Printf("[DEBUG] no answer in cache, index=%d\n", index)
+		}
+	} else {
+		fmt.Printf("[DEBUG] answer from cache, index=%d\n]", index)
+
+		var answerFromCache ReplaceResponseGPT
+		if err = json.Unmarshal([]byte(answerFromCacheString), &answerFromCache.Result); err != nil {
+			errorsCh <- errors.Wrapf(err, "failed to unmarshal answer from cache, index=%d", index)
+		}
+
+		responses <- ChunkInChannelReplace{Index: index, ReplaceResponseGPT: answerFromCache}
+		return
+	}
+
+	prompt := fmt.Sprintf(promptFormat, chunk)
+	answer, err := sendRequest(prompt, c.cfg)
+	if err != nil {
+		errorsCh <- errors.Wrapf(err, "failed to send chunk request, index=%d", index)
 		return
 	}
 
@@ -289,35 +334,35 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 	answer = strings.TrimPrefix(answer, "json")
 	answer = strings.TrimSuffix(answer, "```")
 
-	var respGPT ReplaceResponseGPT
-	if err = json.Unmarshal([]byte(answer), &respGPT.Result); err != nil {
-		utils.LogError(ctx, err, "invalid answer format from ChatGPT")
-		http.Error(w, utils.Internal, http.StatusInternalServerError)
+	fmt.Printf("[DEBUG] i=%d answer=%s\n", index, answer)
+
+	var resp ReplaceResponseGPT
+	if err = json.Unmarshal([]byte(answer), &resp.Result); err != nil {
+		errorsCh <- errors.Wrapf(err, "failed to unmarshal chunk response, index=%d", index)
 		return
 	}
-
 	if requestType != 0 {
-		for i := range respGPT.Result {
-			respGPT.Result[i].Type = requestType
+		for i := range resp.Result {
+			resp.Result[i].Type = requestType
 		}
 	}
 
-	toCache, err := json.Marshal(respGPT)
+	responses <- ChunkInChannelReplace{Index: index, ReplaceResponseGPT: resp}
+
+	respBytes, err := json.Marshal(resp.Result)
 	if err != nil {
-		utils.LogError(ctx, err, "failed to marshal answer")
-		http.Error(w, utils.Internal, http.StatusInternalServerError)
-		return
-	}
-	if err = c.cache.SetAnswer(ctx, prompt, string(toCache), featureReplace); err != nil {
-		utils.LogError(ctx, err, "failed to set answer in cache")
-		http.Error(w, utils.Internal, http.StatusInternalServerError)
-		return
+		errorsCh <- errors.Wrapf(err, "failed to marshal chunk response, index=%d", index)
 	}
 
-	resp := ReplaceResponse{Blocks: []Block{{Text: req.Text, ReplaceResponseGPT: respGPT}}}
-	if err = json.NewEncoder(w).Encode(resp); err != nil {
-		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
-		http.Error(w, utils.Internal, http.StatusInternalServerError)
-		return
+	if err = c.cache.SetAnswer(ctx, chunk, string(respBytes), featureReplace); err != nil {
+		errorsCh <- errors.Wrapf(err, "failed to set answer in cache, index=%d", index)
 	}
+}
+
+func joinResponsesReplace(responses []ChunkInChannelReplace) ReplaceResponseGPT {
+	resp := ReplaceResponseGPT{Result: make([]Replacement, 0)}
+	for _, response := range responses {
+		resp.Result = append(resp.Result, response.Result...)
+	}
+	return resp
 }
