@@ -18,12 +18,13 @@ import (
 )
 
 var (
-	blurPreconceptionPrompt   = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость. Результат представь в виде json, формат такой: {\\\"preconception\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
-	blurAgitationPrompt       = "Найди в тексте все слова, словосочетания и предложения, которые содержат негативную агитацию. Результат представь в виде json, формат такой: {\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
-	blurAllPrompt             = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость или негативную агитацию. Результат представь в виде json, содержащего два массива строк, формат такой: {\\\"preconception\\\":[],\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
-	changePreconceptionPrompt = "Найди в тексте негативную предвзятость и исправь текст так, чтобы её не было. Все остальные негативные моменты, не связанные с предвзятостью, оставь без изменений 1 в 1. Если в тексте нет предвзятости, то оставь текст без изменений совсем. В ответе напиши только результат и ничего лишнего. Текст: %s"
-	changeAgitationPrompt     = "Найди в тексте негативную агитацию и исправь текст так, чтобы её не было. Все остальные негативные моменты, не связанные с агитацией, оставь без изменений 1 в 1. Если в тексте нет агитации, то оставь текст без изменений совсем. В ответе напиши только результат и ничего лишнего. Текст: %s"
-	changeAllPrompt           = "Найди в тексте негативную предвзятость и негативную агитацию и исправь текст так, чтобы их не было. Все остальные негативные моменты, не связанные с предвзятостью или агитацией, оставь без изменений 1 в 1. Если в тексте нет предвзятости и агитации, то оставь текст без изменений совсем. В ответе напиши только результат и ничего лишнего. Текст: %s"
+	blurPreconceptionPrompt = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость. Результат представь в виде json, формат такой: {\\\"preconception\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
+	blurAgitationPrompt     = "Найди в тексте все слова, словосочетания и предложения, которые содержат негативную агитацию. Результат представь в виде json, формат такой: {\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
+	blurAllPrompt           = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость или негативную агитацию. Результат представь в виде json, содержащего два массива строк, формат такой: {\\\"preconception\\\":[],\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
+
+	changePreconceptionPrompt = "Найди в тексте негативную предвзятость и скажи, на что её исправить. Все остальные негативные моменты, не связанные с предвзятостью, исправлять не нужно. Если в тексте нет предвзятости, то не нужно исправлять ничего. В ответе напиши только результат, что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\"}] Текст: %s"
+	changeAgitationPrompt     = "Найди в тексте негативную агитацию и скажи, на что её исправить. Все остальные негативные моменты, не связанные с агитацией, исправлять не нужно. Если в тексте нет агитации, то не нужно исправлять ничего. В ответе напиши только результат, что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\"}] Текст: %s"
+	changeAllPrompt           = "Найди в тексте негативную предвзятость и негативную агитацию и скажи, на что их исправить. Все остальные негативные моменты, не связанные с предвзятостью или агитацией, исправлять не нужно. Если в тексте нет предвзятости и агитации, то не нужно исправлять ничего. В ответе напиши только результат что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\",\\\"type\\\":1}] где type=1 - замена предвзятости, type=2 - замена агитации Текст: %s"
 )
 
 type ChatGPT struct {
@@ -53,7 +54,13 @@ type BlurResponse struct {
 }
 
 type ChangeResponse struct {
-	Result string `json:"result"`
+	Result []Replacement `json:"result"`
+}
+
+type Replacement struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Type int    `json:"type"`
 }
 
 func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
@@ -196,13 +203,18 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 0 - оба параметра, 1 - предвзятость, 2 - агитация
+	requestType := 0
+
 	var promptFormat string
 	if req.Preconception && req.Agitation {
 		promptFormat = changeAllPrompt
 	} else if req.Preconception {
 		promptFormat = changePreconceptionPrompt
+		requestType = 1
 	} else if req.Agitation {
 		promptFormat = changeAgitationPrompt
+		requestType = 2
 	} else {
 		if err := json.NewEncoder(w).Encode(BlurResponse{}); err != nil {
 			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
@@ -219,7 +231,23 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := ChangeResponse{Result: answer}
+	answer = strings.TrimPrefix(answer, "```")
+	answer = strings.TrimPrefix(answer, "json")
+	answer = strings.TrimSuffix(answer, "```")
+
+	var resp ChangeResponse
+	if err = json.Unmarshal([]byte(answer), &resp.Result); err != nil {
+		utils.LogError(ctx, err, "invalid answer format from ChatGPT")
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+		return
+	}
+
+	if requestType != 0 {
+		for i := range resp.Result {
+			resp.Result[i].Type = requestType
+		}
+	}
+
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
