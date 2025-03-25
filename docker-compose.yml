@@ -32,10 +32,14 @@ services:
       - "5000:5000"
     restart: unless-stopped
     environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
       - PYTHONUNBUFFERED=1
     volumes:
       - ./nlp_words_app:/app
     command: [ "python", "app.py" ]
+    networks:
+      - purify-network
 
   redis:
     image: redis:latest

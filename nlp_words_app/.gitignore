@@ -187,4 +187,4 @@ cython_debug/
 
 docs/
 
-docker-compose.dev.yml
+docker-compose.yml
