@@ -17,6 +17,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	featureBlur    = "blur"
+	featureReplace = "replace"
+)
+
 var (
 	blurPreconceptionPrompt = "Найди в тексте все слова, словосочетания и предложения, которые содержат предвзятость. Результат представь в виде json, формат такой: {\\\"preconception\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
 	blurAgitationPrompt     = "Найди в тексте все слова, словосочетания и предложения, которые содержат негативную агитацию. Результат представь в виде json, формат такой: {\\\"agitation\\\":[]}, в ответе напиши только результат и ничего лишнего. Текст для анализа: %s"
@@ -141,7 +146,7 @@ type ChunkInChannel struct {
 func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannel, errorsCh chan<- error) {
 	defer wg.Done()
 
-	answerFromCache, err := c.cache.GetAnswer(ctx, chunk)
+	answerFromCache, err := c.cache.GetAnswer(ctx, chunk, featureBlur)
 	if err != nil {
 		if !goerrors.Is(err, cache.ErrNoAnswer) {
 			errorsCh <- errors.Wrapf(err, "failed to get answer from cache, index=%d", index)
@@ -178,7 +183,7 @@ func (c *ChatGPT) sendChunkRequest(ctx context.Context, promptFormat string, chu
 
 	responses <- ChunkInChannel{Index: index, BlurResponse: resp}
 
-	if err = c.cache.SetAnswer(ctx, chunk, cache.Value{Preconception: resp.Preconception, Agitation: resp.Agitation}); err != nil {
+	if err = c.cache.SetAnswer(ctx, chunk, cache.Value{Preconception: resp.Preconception, Agitation: resp.Agitation}, featureBlur); err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to set answer in cache, index=%d", index)
 	}
 }
