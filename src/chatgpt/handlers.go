@@ -259,7 +259,8 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chunks := utils.SplitBlocksIntoChunks(req.Blocks, c.cfg.MaxTokensInChunk)
+	// chunks := utils.SplitBlocksIntoChunks(req.Blocks, c.cfg.MaxTokensInChunk)
+	chunks := req.Blocks
 
 	wg := &sync.WaitGroup{}
 	responsesCh := make(chan ChunkInChannelReplace)
@@ -298,17 +299,22 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 end:
 	fmt.Printf("[DEBUG] chunkErrors: %v\n", chunkErrors)
 
-	allResponses := joinResponsesReplace(chunkResponses)
+	//allResponses := joinResponsesReplace(chunkResponses)
+
+	//resp := ReplaceResponse{Blocks: make([]Block, 0)}
+	//for _, block := range req.Blocks {
+	//	found := make([]Replacement, 0)
+	//	for _, replacement := range allResponses.Result {
+	//		if strings.Contains(block, replacement.From) {
+	//			found = append(found, replacement)
+	//		}
+	//	}
+	//	resp.Blocks = append(resp.Blocks, Block{Text: block, ReplaceResponseGPT: ReplaceResponseGPT{Result: found}})
+	//}
 
 	resp := ReplaceResponse{Blocks: make([]Block, 0)}
-	for _, block := range req.Blocks {
-		found := make([]Replacement, 0)
-		for _, replacement := range allResponses.Result {
-			if strings.Contains(block, replacement.From) {
-				found = append(found, replacement)
-			}
-		}
-		resp.Blocks = append(resp.Blocks, Block{Text: block, ReplaceResponseGPT: ReplaceResponseGPT{Result: found}})
+	for _, chunkResp := range chunkResponses {
+		resp.Blocks = append(resp.Blocks, Block{Text: req.Blocks[chunkResp.Index], ReplaceResponseGPT: chunkResp.ReplaceResponseGPT})
 	}
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
