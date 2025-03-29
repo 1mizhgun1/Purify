@@ -65,11 +65,7 @@ class SpellChecker:
             self._spelling_cache[word] = correction
             return correction
         
-        # import time
-        # start = time.time()
         closest_word = self.find_closest_word(word)
-        # end = time.time()
-        # print(f"{end - start}")
         if closest_word:
             if closest_word in self.error_to_correct:
                 correction = self.error_to_correct[closest_word][0][0]

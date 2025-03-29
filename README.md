@@ -81,7 +81,21 @@
    }
    ```
 
-6. Первоначальный классификатор ```(Baseline решение):``` [тык](purify_ml/ml_classifier_app)
+6. NLP-сервис. ```(Baseline решение):``` [тык](nlp_words_app/)
+
+```bash
+# Запуск:
+cd nlp_words_app
+docker-compose -f docker-compose.dev.yml up --build # (добавлен в .gitignore)
+curl -X POST http://localhost:5001/analyze \
+-H "Content-Type: application/json" \
+-d '{
+  "blocks": [
+    "Текст 1 для исследования",
+    "Текст 2 для исследования"
+  ]
+}'
+```
    
 ## Наш оберег
 

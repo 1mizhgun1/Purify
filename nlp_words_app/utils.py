@@ -80,57 +80,82 @@ def get_word_tag(word, lemma):
         cache_set(word_cache_key, cached_tag)
         return cached_tag
     
-    tag = term_to_tag_dict.get(lemma, 'NEUT')
+    tag, prob = term_to_tag_dict.get(lemma, ["NEUT", 0.0])
+    if tag == 'NGTV' and prob < THRESHOLD:
+        tag = "NGTV"
+    else:
+        tag = "NEUT"
     cache_set(word_cache_key, tag)
     cache_set(lemma_cache_key, tag)
     return tag
 
 def clean_text(text):
-    text = text.lower()
     text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
     text = ' '.join(text.split())
-    return text.lower()
+    return text
 
 def is_pronoun_or_stopword(word):
     return word in PRONOUNS or word in stopword_set
 
-def split_compound_words(word):
-    return re.findall(r'[А-Яа-яё]+', word)
+def normalize_word(word):
+    word_tmp = word
+    word_tmp = word_tmp.replace('bI', 'ы')
+    word_tmp = word_tmp.replace('3.14', 'пи')
+    word_tmp = word_tmp.replace('3,14', 'пи')
+    
+    for replacement_group in replace_map:
+        for pattern, replacement in replacement_group.items():
+            word_tmp = word_tmp.replace(pattern, replacement)
+    
+    word_tmp = re.sub(r'^[^а-яёa-z]+|[^а-яёa-z]+$', '', word_tmp, flags=re.IGNORECASE)
+    word_tmp = re.sub(r'([аеёиоуыэюяaeiouy])\1+', r'\1', word_tmp, flags=re.IGNORECASE)
+    word_tmp = re.sub(r'([а-яёa-z])[^а-яёa-z]+([а-яёa-z])', r'\1-\2', word_tmp, flags=re.IGNORECASE)
+    word_tmp = re.sub(r'-+', '-', word_tmp)
+    return word_tmp.lower()
 
 def get_negative_words(text):
     cleaned_text = clean_text(text)
+
     negative_words = set()
     
-    words = []
-    for token in cleaned_text.split():
-        words.extend(split_compound_words(token))
-    
-    for word in words:
-        if len(word) < 2 or is_pronoun_or_stopword(word):
+    for word in cleaned_text.split():
+        if len(word) < 2 or is_pronoun_or_stopword(word.lower()):
             continue
+        
+        word_upd = normalize_word(word).strip()
 
-        if is_material_word(word) or word == "сука":
-            cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV")
-            negative_words.add(word)
-            continue
+        cache_logger.debug("")
+        cache_logger.debug(f"{word}: {word_upd}")
 
-        lemma = get_lemma(word)
+        lemma = get_lemma(word_upd)
         
         if is_pronoun_or_stopword(lemma):
             continue
 
-        tag = get_word_tag(word, lemma)
+        tag = get_word_tag(word_upd, lemma)
+        cache_logger.debug(f"Lemma: {lemma}")
+        cache_logger.debug(f"Tag: {tag}")
+        cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
+        cache_logger.debug("")
         
         if tag == 'NGTV':
             negative_words.add(word)
+            continue
+
+        elif is_material_word(word_upd):
+            cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV")
+            negative_words.add(word)
+            continue
         
         else:
-            corrected_word = checker.correct_spelling(word)
+            corrected_word = checker.correct_spelling(word_upd)
             if corrected_word:
                 corrected_lemma = get_lemma(corrected_word)
+
                 tag = get_word_tag(corrected_word, corrected_lemma)
                 if tag == 'NGTV':
                     negative_words.add(word)
+                    continue
     
     print(negative_words)
     return list(negative_words)
