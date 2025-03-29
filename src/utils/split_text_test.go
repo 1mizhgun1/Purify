@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -15,4 +16,34 @@ func TestSplitTextIntoChunks(t *testing.T) {
 	chunks := SplitTextIntoChunks(text, 30, 4)
 
 	require.Equal(t, text, strings.Join(chunks, ""))
+}
+
+func TestSplitBlocksIntoChunks(t *testing.T) {
+	blocks := []string{
+		"Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+		"Vestibulum fermentum massa eu magna vestibulum, vel convallis tortor gravida.",
+		"Curabitur dictum tincidunt purus, eget malesuada magna imperdiet at.",
+		"A verylongwordthatislongerthanmaxTokensshouldbesplitproperly",
+	}
+	maxTokens := 500
+	chunks := SplitBlocksIntoChunks(blocks, maxTokens)
+	for i, chunk := range chunks {
+		fmt.Printf("Chunk %d: %q\n", i+1, chunk)
+	}
+}
+
+func TestFindSubstrings(t *testing.T) {
+	block := "Welcome to Golang"
+
+	substrings := []string{
+		"Hello",
+		"Go",
+		"Golang",
+	}
+
+	result := FindSubstrings(block, substrings)
+
+	for _, subs := range result {
+		fmt.Printf("%v\n", subs)
+	}
 }

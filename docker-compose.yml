@@ -29,7 +29,7 @@ services:
     env_file:
       - .env
     ports:
-      - "5000:5000"
+      - "5001:5001"
     restart: unless-stopped
     environment:
       - REDIS_HOST=redis
@@ -48,7 +48,7 @@ services:
       - .env
     volumes:
       - ./redis.conf:/etc/redis/redis.conf
-      - ${REDIS_DATA_DIRECTORY}:/data
+      - redis-data:/data
     command: [ "redis-server", "/etc/redis/redis.conf" ]
     ports:
       - "6379:6379"
@@ -59,3 +59,6 @@ networks:
   purify-network:
     name: purify-network
     driver: bridge
+
+volumes:
+  redis-data:
