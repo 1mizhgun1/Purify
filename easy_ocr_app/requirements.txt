@@ -14,9 +14,20 @@ natsort==8.4.0
 python-bidi==0.6.6
 easyocr==1.7.2
 pillow==11.1.0
+python-dotenv
 Flask==3.1.0
+requests==2.28.2
 
-# curl -X POST \
-#   http://localhost:5002/process_image \
-#   -H "Content-Type: application/json" \
-#   -d "{\"image\": \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8337.PNG | tr -d '\n')\"}"
+curl -X POST \
+  http://localhost:5002/process_image \
+  -H "Content-Type: application/json" \
+  -d "{\"image\": \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8337.PNG | tr -d '\n')\"}"
+
+# curl -X POST http://localhost:5002/process_image \
+# -H "Content-Type: application/json" \
+# -d '{"image_path": "/Users/chervonikov_alexey/Desktop/invalid_images/IMG_8337.PNG"}
+
+# docker build -t ocr-app .
+# docker run -p 5002:5002 ocr-app
+# docker build --platform linux/arm64/v8 -t ocr-app .
+# docker run -p 5002:5002 --platform linux/amd64 -it ocr-app

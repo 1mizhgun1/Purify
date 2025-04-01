@@ -23,11 +23,16 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 weights_dir = os.path.join(base_dir, 'weights_config') 
 
 device_gpu = True if torch.cuda.is_available() else False
-reader = easyocr.Reader(['ru'], 
+reader = easyocr.Reader(['ru', 'en'], 
                         user_network_directory = weights_dir + "/user_network",
                         model_storage_directory = weights_dir + "/model",
                         recog_network = 'custom_example',
                         gpu=device_gpu)
+
+print(reader)
+
+print(weights_dir + "/user_network")
+print(weights_dir + "/model")
 
 def get_image_results(image, easyocr_reader = reader):
     result = easyocr_reader.readtext(image)
@@ -64,26 +69,29 @@ def parse_ocr_result(ocr_results):
     ]
 
     print(bboxes)
+    print(combined_text)
 
     payload = {
         "blocks": [combined_text]  
     }
 
-    response = requests.post(
-        "http://localhost:5000/analyze",
-        json=payload,
-        headers={"Content-Type": "application/json"}
-    )
+    return combined_text, ""
 
-    if response.status_code == 200:
-        if len(combined_text) < 3 and len(combined_text) != 0:
-               return bboxes, combined_text
+    # response = requests.post(
+    #     "http://localhost:5001/analyze",
+    #     json=payload,
+    #     headers={"Content-Type": "application/json"}
+    # )
 
-        elif len(response.json()) != 0:
-            neg_words = response.json()[0]['negative_words']
-            if len(neg_words) != 0:
-                return bboxes, combined_text
-        else:
-            return None, ""
-    else:
-        print("Error:", response.status_code, response.text)
+    # if response.status_code == 200:
+    #     if len(combined_text) < 3 and len(combined_text) != 0:
+    #            return bboxes, combined_text
+
+    #     elif len(response.json()) != 0:
+    #         neg_words = response.json()[0]['negative_words']
+    #         if len(neg_words) != 0:
+    #             return bboxes, combined_text
+    #     else:
+    #         return None, ""
+    # else:
+    #     print("Error:", response.status_code, response.text)
