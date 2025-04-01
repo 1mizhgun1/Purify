@@ -53,6 +53,7 @@ def process_image():
         ocr_results = get_image_results(img_cv)
         logger.info("OCR result collected...")
         bboxes, combined_text = parse_ocr_result(ocr_results)
+        logger.info(f"Text extracted: {combined_text}")
         return jsonify({"bboxes": bboxes if bboxes else [],
                         "text": combined_text})
     

@@ -23,16 +23,18 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 weights_dir = os.path.join(base_dir, 'weights_config') 
 
 device_gpu = True if torch.cuda.is_available() else False
+print(device_gpu)
 reader = easyocr.Reader(['ru', 'en'], 
-                        user_network_directory = weights_dir + "/user_network",
-                        model_storage_directory = weights_dir + "/model",
+                        # user_network_directory = weights_dir + "/user_network",
+                        # model_storage_directory = weights_dir + "/model",
                         recog_network = 'custom_example',
-                        gpu=device_gpu)
+                        detect_network="craft",
+                        gpu=device_gpu, quantize=False)
 
-print(reader)
+# print(reader)
 
-print(weights_dir + "/user_network")
-print(weights_dir + "/model")
+# print(weights_dir + "/user_network")
+# print(weights_dir + "/model")
 
 def get_image_results(image, easyocr_reader = reader):
     result = easyocr_reader.readtext(image)
@@ -75,7 +77,7 @@ def parse_ocr_result(ocr_results):
         "blocks": [combined_text]  
     }
 
-    return combined_text, ""
+    return bboxes, combined_text
 
     # response = requests.post(
     #     "http://localhost:5001/analyze",

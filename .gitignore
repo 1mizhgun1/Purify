@@ -18,3 +18,5 @@ go.work
 some.txt
 
 redis.conf
+
+craft_mlt_25k.pth
