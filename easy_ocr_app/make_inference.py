@@ -77,23 +77,21 @@ def parse_ocr_result(ocr_results):
         "blocks": [combined_text]  
     }
 
-    return bboxes, combined_text
+    response = requests.post(
+        "http://host.docker.internal:5001/analyze",
+        json=payload,
+        headers={"Content-Type": "application/json"}
+    )
 
-    # response = requests.post(
-    #     "http://localhost:5001/analyze",
-    #     json=payload,
-    #     headers={"Content-Type": "application/json"}
-    # )
+    if response.status_code == 200:
+        if len(combined_text) < 3 and len(combined_text) != 0:
+               return bboxes, combined_text
 
-    # if response.status_code == 200:
-    #     if len(combined_text) < 3 and len(combined_text) != 0:
-    #            return bboxes, combined_text
-
-    #     elif len(response.json()) != 0:
-    #         neg_words = response.json()[0]['negative_words']
-    #         if len(neg_words) != 0:
-    #             return bboxes, combined_text
-    #     else:
-    #         return None, ""
-    # else:
-    #     print("Error:", response.status_code, response.text)
+        elif len(response.json()) != 0:
+            neg_words = response.json()[0]['negative_words']
+            if len(neg_words) != 0:
+                return bboxes, combined_text
+        else:
+            return None, ""
+    else:
+        print("Error:", response.status_code, response.text)
