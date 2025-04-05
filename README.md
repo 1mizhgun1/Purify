@@ -109,10 +109,19 @@ curl -X POST http://localhost:5001/analyze \
 cd easy_ocr_app
 docker build -t ocr-app .
 docker run -p 5002:5002 ocr-app
+
+# Одно изображение
 curl -X POST \
   http://localhost:5002/process_image \
   -H "Content-Type: application/json" \
-  -d "{\"image\": \"$(base64 -i ../invalid_images/IMG_8359.JPG | tr -d '\n')\"}"
+  -d "{\"image\": \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8305.JPG | tr -d '\n')\"}"
+
+# Несколько изображений
+curl -X POST \
+  http://localhost:5002/process_images_batch \
+  -H "Content-Type: application/json" \
+  -w "\n" \
+  -d "{\"images\": [\"$(base64 -i /Users/chervonikov_alexey/Desktop/projects/Technopark_Spring_2025/diploma_project/easyocr/invalid_images/IMG_8329.JPG | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/2025-04-05_16.18.59.jpg | tr -d '\n')\"]}"
 ```
 
 ## Наш оберег
