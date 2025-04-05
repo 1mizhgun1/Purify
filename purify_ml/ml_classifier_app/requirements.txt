@@ -1,8 +1,0 @@
-Flask==3.1.0
-joblib==1.4.2
-pandas==2.2.3
-nltk==3.9.1
-pymorphy3==2.0.3
-pymorphy3-dicts-ru==2.4.417150.4580142
-scikit-learn==1.6.1
-gensim==4.3.3
