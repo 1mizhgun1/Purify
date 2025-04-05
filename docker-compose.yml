@@ -7,6 +7,8 @@ services:
     depends_on:
       redis:
         condition: service_started
+      minio:
+        condition: service_started
     env_file:
       - .env
     ports:
@@ -55,6 +57,21 @@ services:
     networks:
       - purify-network
 
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"       # API
+      - "9001:9001"       # Web UI
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    command: server --console-address ":9001" /data
+    networks:
+      - purify-network
+
 networks:
   purify-network:
     name: purify-network
@@ -62,3 +79,4 @@ networks:
 
 volumes:
   redis-data:
+  minio_data:
