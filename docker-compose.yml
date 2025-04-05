@@ -20,8 +20,8 @@ services:
         source: ${LOG_DIRECTORY}
         target: /var/log/purify
 
-  nlp:
-    container_name: nlp
+  nlp_words:
+    container_name: nlp_words
     build:
       context: .
       dockerfile: ./nlp_words_app/Dockerfile
@@ -39,6 +39,24 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./nlp_words_app:/app
+    command: [ "python", "app.py" ]
+    networks:
+      - purify-network
+
+  easy_ocr:
+    container_name: easy_ocr
+    build:
+      context: .
+      dockerfile: ./easy_ocr_app/Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./easy_ocr_app:/app
     command: [ "python", "app.py" ]
     networks:
       - purify-network
