@@ -16,6 +16,7 @@ import (
 	"purify/src/cache"
 	"purify/src/chatgpt"
 	"purify/src/config"
+	"purify/src/easy_ocr"
 	"purify/src/middleware"
 	"purify/src/mistral_ai"
 
@@ -31,7 +32,7 @@ func init() {
 	}
 }
 
-func createMinioBucketIfNotExists(minioClient *minio.Client, bucketName string, region string, logger *slog.Logger) error {
+func initMinio(minioClient *minio.Client, bucketName string, region string, logger *slog.Logger) error {
 	ctx := context.Background()
 
 	exists, err := minioClient.BucketExists(ctx, bucketName)
@@ -44,6 +45,23 @@ func createMinioBucketIfNotExists(minioClient *minio.Client, bucketName string, 
 			return errors.Wrap(err, "failed to create bucket")
 		}
 		logger.Info("minio bucket created")
+
+		if err = minioClient.SetBucketPolicy(ctx, bucketName, fmt.Sprintf(`{
+			"Version":"2012-10-17",
+			"Statement":[
+				{
+					"Effect":"Allow",
+					"Principal":{"AWS":["*"]},
+					"Action":["s3:GetObject"],
+					"Resource":["arn:aws:s3:::%s/*"]
+				}
+			]
+		}`, bucketName),
+		); err != nil {
+			return errors.Wrap(err, "failed to set bucket policy")
+		}
+		logger.Info("minio bucket policy set")
+
 	} else {
 		logger.Info("minio bucket already exists")
 	}
@@ -107,8 +125,9 @@ func main() {
 	}
 	logger.Info("Minio connected")
 
-	if err = createMinioBucketIfNotExists(minioClient, cfg.Minio.BucketName, region, logger); err != nil {
+	if err = initMinio(minioClient, cfg.Minio.BucketName, region, logger); err != nil {
 		logger.Error(errors.Wrap(err, "minio init error").Error())
+		return
 	}
 
 	// minio
@@ -119,6 +138,8 @@ func main() {
 
 	mistralAI := mistral_ai.NewMistralAI(cfg.MistralAI)
 	chatGPT := chatgpt.NewChatGPT(cfg.ChatGPT, redisCache)
+
+	easyOcr := easy_ocr.NewEasyOcr(minioClient, cfg.EasyOcr, cfg.Minio)
 
 	// entities
 	// =================================================================================================================
@@ -138,6 +159,7 @@ func main() {
 	r.Handle("/analyze_text", http.HandlerFunc(mistralAI.AnalyzeText)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/blur", http.HandlerFunc(chatGPT.Blur)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/replace", http.HandlerFunc(chatGPT.Replace)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/process_image", http.HandlerFunc(easyOcr.ProcessImage)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)
 	server := http.Server{

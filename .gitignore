@@ -20,3 +20,7 @@ some.txt
 redis.conf
 
 craft_mlt_25k.pth
+
+debug/
+
+debug_original_*

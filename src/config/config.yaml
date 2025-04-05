@@ -19,3 +19,7 @@ chat_gpt:
   max_tokens_in_chunk: 500 # for replace
 minio:
   bucket_name: purify
+easy_ocr:
+  host: easy_ocr
+  port: 5002
+  endpoint: process_image

@@ -18,6 +18,7 @@ type Config struct {
 	MistralAI MistralAIConfig `yaml:"mistral_ai"`
 	ChatGPT   ChatGPTConfig   `yaml:"chat_gpt"`
 	Minio     MinioConfig     `yaml:"minio"`
+	EasyOcr   EasyOcrConfig   `yaml:"easy_ocr"`
 }
 
 type MainConfig struct {
@@ -47,6 +48,12 @@ type ChatGPTConfig struct {
 
 type MinioConfig struct {
 	BucketName string `yaml:"bucket_name"`
+}
+
+type EasyOcrConfig struct {
+	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
+	Endpoint string `yaml:"endpoint"`
 }
 
 func MustLoadConfig(path string, logger *slog.Logger) *Config {
