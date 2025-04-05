@@ -122,7 +122,16 @@ curl -X POST \
   -H "Content-Type: application/json" \
   -w "\n" \
   -d "{\"images\": [\"$(base64 -i /Users/chervonikov_alexey/Desktop/projects/Technopark_Spring_2025/diploma_project/easyocr/invalid_images/IMG_8329.JPG | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/2025-04-05_16.18.59.jpg | tr -d '\n')\"]}"
+
+# В несколько потоков
+curl -X POST \
+  http://localhost:5002/process_images_parallel \
+  -H "Content-Type: application/json" \
+  -w "\n" \
+  -d "{\"images\": [\"$(base64 -i /Users/chervonikov_alexey/Desktop/projects/Technopark_Spring_2025/diploma_project/easyocr/invalid_images/IMG_8329.JPG | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/2025-04-05_16.18.59.jpg | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8346.JPG | tr -d '\n')\"]}"
 ```
+
+
 
 ## Наш оберег
 

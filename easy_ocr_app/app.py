@@ -3,6 +3,7 @@ import base64
 import numpy as np
 import cv2
 import time
+from concurrent.futures import ThreadPoolExecutor
 from make_inference import (
     get_image_results,
     parse_ocr_result,
@@ -13,6 +14,40 @@ from make_inference import (
 )
 
 app = Flask(__name__)
+executor = ThreadPoolExecutor(max_workers=20)
+
+def process_single_image_worker(image_data: bytes, idx: int = None) -> dict:
+    """Функция для обработки одного изображения в потоке"""
+    try:
+        start_time = time.time()
+        
+        img_cv = cv2.imdecode(np.frombuffer(image_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        
+        debug_path = f"debug_{idx}_{int(time.time())}.jpg" if idx is not None else f"debug_{int(time.time())}.jpg"
+        cv2.imwrite(debug_path, img_cv)
+        logger.info(f"Image {idx} saved to {debug_path}")
+        
+        ocr_results = get_image_results(img_cv)
+        bboxes, combined_text, blurred_base64 = parse_ocr_result(ocr_results, img_cv.copy())
+        
+        processing_time = time.time() - start_time
+        logger.info(f"Image {idx} processed in {processing_time:.2f}s")
+        
+        return {
+            "bboxes": bboxes,
+            "text": combined_text,
+            "blurred_image": blurred_base64,
+            "processing_time": processing_time,
+            "status": "success"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing image {idx}: {str(e)}")
+        return {
+            "error": str(e),
+            "status": "error",
+            "image_index": idx
+        }
 
 @app.route('/process_image', methods=['POST'])
 def process_single_image():
@@ -96,6 +131,52 @@ def process_images_batch():
         
     except Exception as e:
         logger.error(f"Batch processing error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/process_images_parallel', methods=['POST'])
+def process_images_parallel():
+    """Обработка нескольких изображений параллельно"""
+    logger.info("Received parallel processing request")
+    data = request.get_json()
+    
+    if not data or 'images' not in data:
+        logger.error("No images array provided")
+        return jsonify({"error": "No images provided"}), 400
+    
+    if not isinstance(data['images'], list):
+        logger.error("Images should be provided as array")
+        return jsonify({"error": "Images should be provided as array"}), 400
+    
+    try:
+        start_time = time.time()
+        base64_images = data['images']
+        
+        MAX_IMAGES = 32
+        if len(base64_images) > MAX_IMAGES:
+            logger.warning(f"Too many images ({len(base64_images)}), truncating to {MAX_IMAGES}")
+            base64_images = base64_images[:MAX_IMAGES]
+        
+        image_data_list = [base64.b64decode(img) for img in base64_images]
+        
+        futures = [executor.submit(process_single_image_worker, img_data, idx) 
+                 for idx, img_data in enumerate(image_data_list)]
+        
+        results = [future.result() for future in futures]
+        
+        success_count = sum(1 for r in results if r.get("status") == "success")
+        total_time = time.time() - start_time
+        
+        logger.info(f"Processed {len(results)} images in {total_time:.2f}s ({success_count} successes)")
+        
+        return jsonify({
+            "results": results,
+            "processed_count": len(results),
+            "success_count": success_count,
+            "processing_time": total_time
+        })
+        
+    except Exception as e:
+        logger.error(f"Parallel processing error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/healthcheck', methods=['GET'])
