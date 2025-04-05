@@ -7,6 +7,32 @@ import requests
 import base64
 from PIL import Image
 import io
+import datetime
+import logging 
+from logging.handlers import RotatingFileHandler
+
+def setup_logger():
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    file_handler = RotatingFileHandler(
+        'app.log', 
+        maxBytes=1024*1024, 
+        backupCount=5
+    )
+    file_handler.setFormatter(formatter)
+    
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+    
+    return logger
+
+logger = setup_logger()
 
 def read_image_to_base64(file_path):
     with open(file_path, "rb") as image_file:
@@ -31,47 +57,38 @@ reader = easyocr.Reader(['ru', 'en'],
                         detect_network="craft",
                         gpu=device_gpu, quantize=False)
 
-# print(reader)
-
-# print(weights_dir + "/user_network")
-# print(weights_dir + "/model")
-
 def get_image_results(image, easyocr_reader = reader):
     result = easyocr_reader.readtext(image)
     return result
 
-# def blur_bboxes(image_path, bboxes, output_path=None, blur_strength=25):
-#     image = cv2.imread(image_path)
-#     if image is None:
-#         raise ValueError("Не удалось загрузить изображение")
+def blur_bboxes(image, bboxes, output_path=None, blur_strength=101):
+    if image is None:
+        raise ValueError("Не удалось загрузить изображение")
     
-#     blur_strength = blur_strength if blur_strength % 2 != 0 else blur_strength + 1
+    blur_strength = blur_strength if blur_strength % 2 != 0 else blur_strength + 1
     
-#     for bbox in bboxes:
-#         pts = np.array(bbox, dtype=np.int32)
-#         x, y, w, h = cv2.boundingRect(pts)
-#         roi = image[y:y+h, x:x+w]
-#         blurred_roi = cv2.GaussianBlur(roi, (blur_strength, blur_strength), 0)
-#         mask = np.zeros(roi.shape[:2], dtype=np.uint8)
-#         cv2.fillPoly(mask, [pts - [x, y]], 255)
-#         image[y:y+h, x:x+w] = cv2.bitwise_and(blurred_roi, blurred_roi, mask=mask) + \
-#                               cv2.bitwise_and(roi, roi, mask=cv2.bitwise_not(mask))
+    for bbox in bboxes:
+        pts = np.array(bbox, dtype=np.int32)
+        x, y, w, h = cv2.boundingRect(pts)
+        roi = image[y:y+h, x:x+w]
+        blurred_roi = cv2.GaussianBlur(roi, (blur_strength, blur_strength), 0)
+        mask = np.zeros(roi.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(mask, [pts - [x, y]], 255)
+        image[y:y+h, x:x+w] = cv2.bitwise_and(blurred_roi, blurred_roi, mask=mask) + \
+                              cv2.bitwise_and(roi, roi, mask=cv2.bitwise_not(mask))
     
-#     if output_path:
-#         cv2.imwrite(output_path, image)
+    if output_path:
+         cv2.imwrite(output_path, image)
     
-#     return image
+    return image
 
-def parse_ocr_result(ocr_results):
+def parse_ocr_result(ocr_results, image):
 
     combined_text = " ".join([text for (_, text, _) in ocr_results])
     bboxes = [
         [[int(x), int(y)] for [x, y] in bbox]  
         for (bbox, _, _) in ocr_results
     ]
-
-    print(bboxes)
-    print(combined_text)
 
     payload = {
         "blocks": [combined_text]  
@@ -84,14 +101,46 @@ def parse_ocr_result(ocr_results):
     )
 
     if response.status_code == 200:
-        if len(combined_text) < 3 and len(combined_text) != 0:
-               return bboxes, combined_text
+        
+        api_response = response.json()
+        if not api_response:  
+            return None, "", None
 
-        elif len(response.json()) != 0:
-            neg_words = response.json()[0]['negative_words']
-            if len(neg_words) != 0:
-                return bboxes, combined_text
-        else:
-            return None, ""
+        if len(combined_text) < 3 and combined_text.strip():
+            blurred_image = image.copy()
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            blurred_path = f"blurred_image_{timestamp}.jpg"
+            blur_bboxes(blurred_image, bad_bboxes, 
+                        # blurred_path
+                        )
+            logger.info(f"Blurred image saved to {blurred_path}")
+            _, buffer = cv2.imencode('.jpg', blurred_image)
+            blurred_base64 = base64.b64encode(buffer).decode('utf-8')
+            return bboxes, combined_text, blurred_base64
+
+        neg_words = api_response[0].get("negative_words", [])
+        if not neg_words:  
+            return None, "", None
+
+        bad_bboxes = []
+        for (bbox, text, _) in ocr_results:
+            if any(bad_word.lower() in text.lower() for bad_word in neg_words):
+                bad_bboxes.append([[int(x), int(y)] for [x, y] in bbox])
+
+        if not bad_bboxes:  
+            return None, "", None
+
+        blurred_image = image.copy()
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        blurred_path = f"blurred_image_{timestamp}.jpg"
+        final_image = blur_bboxes(blurred_image, bad_bboxes, 
+                                #   blurred_path
+                                  )
+        logger.info(f"Blurred image saved to {blurred_path}")
+        _, buffer = cv2.imencode('.jpg', final_image)
+        blurred_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        return bad_bboxes, combined_text, blurred_base64
+        
     else:
         print("Error:", response.status_code, response.text)

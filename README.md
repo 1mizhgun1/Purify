@@ -97,7 +97,7 @@ curl -X POST http://localhost:5001/analyze \
 }'
 ```
 
-7. OCR-сервис
+7. OCR-сервис (easy_ocr_app/)[тык]
 
 ```bash
 # Запуск:
@@ -107,7 +107,7 @@ docker run -p 5002:5002 ocr-app
 curl -X POST \
   http://localhost:5002/process_image \
   -H "Content-Type: application/json" \
-  -d "{\"image\": \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8337.PNG | tr -d '\n')\"}"
+  -d "{\"image\": \"$(base64 -i ../invalid_images/IMG_8359.JPG | tr -d '\n')\"}"
 ```
 
 ## Наш оберег
