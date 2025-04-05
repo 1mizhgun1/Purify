@@ -17,6 +17,7 @@ type Config struct {
 	Main      MainConfig      `yaml:"main"`
 	MistralAI MistralAIConfig `yaml:"mistral_ai"`
 	ChatGPT   ChatGPTConfig   `yaml:"chat_gpt"`
+	Minio     MinioConfig     `yaml:"minio"`
 }
 
 type MainConfig struct {
@@ -42,6 +43,10 @@ type ChatGPTConfig struct {
 	WordsInChunk     int    `yaml:"words_in_chunk"`      // for blur
 	MaxChunks        int    `yaml:"max_chunks"`          // for blur
 	MaxTokensInChunk int    `yaml:"max_tokens_in_chunk"` // for replace
+}
+
+type MinioConfig struct {
+	BucketName string `yaml:"bucket_name"`
 }
 
 func MustLoadConfig(path string, logger *slog.Logger) *Config {

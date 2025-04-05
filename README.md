@@ -17,6 +17,11 @@
 
    REDIS_PASSWORD=some_password
    REDIS_URL=redis://default:${REDIS_PASSWORD}@redis:6379/0?protocol=3
+   
+   MINIO_ROOT_USER=some_username
+   MINIO_ROOT_PASSWORD=some_password
+   MINIO_ENDPOINT=minio:9000
+   MINIO_REGION=us-east-1
     ```
 
 2. При первом запуске выполнить команды:
