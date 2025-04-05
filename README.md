@@ -14,6 +14,7 @@
    
    MISTRAL_AI_API_KEY=some_key
    CHATGPT_API_KEY=some_key
+   DEEPSEEK_API_KEY=some_key
 
    REDIS_PASSWORD=some_password
    REDIS_URL=redis://default:${REDIS_PASSWORD}@redis:6379/0?protocol=3

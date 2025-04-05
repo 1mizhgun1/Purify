@@ -13,8 +13,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"purify/src/ai"
 	"purify/src/cache"
-	"purify/src/chatgpt"
 	"purify/src/config"
 	"purify/src/easy_ocr"
 	"purify/src/middleware"
@@ -137,7 +137,8 @@ func main() {
 	redisCache := cache.NewCache(redisClient)
 
 	mistralAI := mistral_ai.NewMistralAI(cfg.MistralAI)
-	chatGPT := chatgpt.NewChatGPT(cfg.ChatGPT, redisCache)
+	chatGPT := ai.NewAI(cfg.ChatGPT, redisCache, ai.TypeChatGPT)
+	deepseek := ai.NewAI(cfg.Deepseek, redisCache, ai.TypeDeepseek)
 
 	easyOcr := easy_ocr.NewEasyOcr(minioClient, cfg.EasyOcr, cfg.Minio)
 
@@ -157,8 +158,13 @@ func main() {
 	r.Handle("/ping", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("pong")) }))
 
 	r.Handle("/analyze_text", http.HandlerFunc(mistralAI.AnalyzeText)).Methods(http.MethodPost, http.MethodOptions)
+
 	r.Handle("/blur", http.HandlerFunc(chatGPT.Blur)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/replace", http.HandlerFunc(chatGPT.Replace)).Methods(http.MethodPost, http.MethodOptions)
+
+	r.Handle("/deepseek/blur", http.HandlerFunc(deepseek.Blur)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/deepseek/replace", http.HandlerFunc(deepseek.Replace)).Methods(http.MethodPost, http.MethodOptions)
+
 	r.Handle("/process_image", http.HandlerFunc(easyOcr.ProcessImage)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)

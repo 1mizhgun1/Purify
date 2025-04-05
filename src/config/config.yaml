@@ -17,6 +17,13 @@ chat_gpt:
   words_in_chunk: 30 # for blur
   max_chunks: 100 # for blur
   max_tokens_in_chunk: 500 # for replace
+deepseek:
+  base_url: https://api.deepseek.com
+  completions_url: /chat/completions
+  model: deepseek-chat
+  words_in_chunk: 30 # for blur
+  max_chunks: 100 # for blur
+  max_tokens_in_chunk: 500 # for replace
 minio:
   bucket_name: purify
 easy_ocr:

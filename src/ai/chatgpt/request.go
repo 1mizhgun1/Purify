@@ -14,7 +14,7 @@ import (
 
 var client = http.DefaultClient
 
-func sendRequest(prompt string, cfg config.ChatGPTConfig) (string, error) {
+func SendRequest(prompt string, cfg config.AIConfig) (string, error) {
 	url := fmt.Sprintf("%s%s", cfg.BaseURL, cfg.CompletionsURL)
 	requestBody := makeRequestData(cfg.Model, prompt)
 

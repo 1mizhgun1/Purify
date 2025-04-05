@@ -16,7 +16,8 @@ const LoggerContextKey LoggerKey = "logger"
 type Config struct {
 	Main      MainConfig      `yaml:"main"`
 	MistralAI MistralAIConfig `yaml:"mistral_ai"`
-	ChatGPT   ChatGPTConfig   `yaml:"chat_gpt"`
+	ChatGPT   AIConfig        `yaml:"chat_gpt"`
+	Deepseek  AIConfig        `yaml:"deepseek"`
 	Minio     MinioConfig     `yaml:"minio"`
 	EasyOcr   EasyOcrConfig   `yaml:"easy_ocr"`
 }
@@ -37,7 +38,7 @@ type MistralAIConfig struct {
 	MaxChunks      int    `yaml:"max_chunks"`
 }
 
-type ChatGPTConfig struct {
+type AIConfig struct {
 	BaseURL          string `yaml:"base_url"`
 	CompletionsURL   string `yaml:"completions_url"`
 	Model            string `yaml:"model"`

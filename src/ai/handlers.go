@@ -1,4 +1,4 @@
-package chatgpt
+package ai
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"purify/src/ai/chatgpt"
+	"purify/src/ai/deepseek"
 	"purify/src/cache"
 	"purify/src/config"
 	"purify/src/utils"
@@ -17,9 +19,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+type AIType string
+
 const (
 	featureBlur    = "blur"
 	featureReplace = "replace"
+
+	TypeChatGPT  AIType = "chatgpt"
+	TypeDeepseek AIType = "deepseek"
 )
 
 var (
@@ -32,13 +39,14 @@ var (
 	changeAllPrompt           = "Найди в тексте негативную предвзятость и негативную агитацию и скажи, на что их исправить. При этом не нужно менять смысл на положительный, нужно лишь сгладить негатив. Все остальные негативные моменты, не связанные с предвзятостью или агитацией, исправлять не нужно. Если в тексте нет предвзятости и агитации, то не нужно исправлять ничего. В ответе напиши только результат что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\",\\\"type\\\":1}] где type=1 - замена предвзятости, type=2 - замена агитации Текст: %s"
 )
 
-type ChatGPT struct {
-	cfg   config.ChatGPTConfig
+type AI struct {
+	cfg   config.AIConfig
 	cache *cache.Cache
+	kind  AIType
 }
 
-func NewChatGPT(cfg config.ChatGPTConfig, cache *cache.Cache) *ChatGPT {
-	return &ChatGPT{cfg: cfg, cache: cache}
+func NewAI(cfg config.AIConfig, cache *cache.Cache, kind AIType) *AI {
+	return &AI{cfg: cfg, cache: cache, kind: kind}
 }
 
 type BlurRequest struct {
@@ -58,7 +66,7 @@ type Replacement struct {
 	Type int    `json:"type"`
 }
 
-func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
+func (a *AI) Blur(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req BlurRequest
@@ -88,7 +96,7 @@ func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chunks := utils.SplitTextIntoChunks(req.Text, c.cfg.WordsInChunk, c.cfg.MaxChunks)
+	chunks := utils.SplitTextIntoChunks(req.Text, a.cfg.WordsInChunk, a.cfg.MaxChunks)
 
 	wg := &sync.WaitGroup{}
 	responsesCh := make(chan ChunkInChannelBlur)
@@ -97,7 +105,7 @@ func (c *ChatGPT) Blur(w http.ResponseWriter, r *http.Request) {
 	for i, chunk := range chunks {
 		wg.Add(1)
 		time.Sleep(time.Millisecond)
-		go c.sendChunkRequestBlur(ctx, promptFormat, requestType, chunk, i, wg, responsesCh, errorsCh)
+		go a.sendChunkRequestBlur(ctx, promptFormat, requestType, chunk, i, wg, responsesCh, errorsCh)
 	}
 
 	go func() {
@@ -138,10 +146,10 @@ type ChunkInChannelBlur struct {
 	BlurResponse
 }
 
-func (c *ChatGPT) sendChunkRequestBlur(ctx context.Context, promptFormat string, requestType int, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelBlur, errorsCh chan<- error) {
+func (a *AI) sendChunkRequestBlur(ctx context.Context, promptFormat string, requestType int, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelBlur, errorsCh chan<- error) {
 	defer wg.Done()
 
-	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, fmt.Sprintf("%s%d", featureBlur, requestType))
+	answerFromCacheString, err := a.cache.GetAnswer(ctx, chunk, fmt.Sprintf("%s%d", featureBlur, requestType))
 	if err != nil {
 		if !goerrors.Is(err, cache.ErrNoAnswer) {
 			errorsCh <- errors.Wrapf(err, "failed to get answer from cache, index=%d", index)
@@ -161,7 +169,7 @@ func (c *ChatGPT) sendChunkRequestBlur(ctx context.Context, promptFormat string,
 	}
 
 	prompt := fmt.Sprintf(promptFormat, chunk)
-	answer, err := sendRequest(prompt, c.cfg)
+	answer, err := a.SendRequest(prompt)
 	if err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to send chunk request, index=%d", index)
 		return
@@ -186,7 +194,7 @@ func (c *ChatGPT) sendChunkRequestBlur(ctx context.Context, promptFormat string,
 		errorsCh <- errors.Wrapf(err, "failed to marshal chunk response, index=%d", index)
 	}
 
-	if err = c.cache.SetAnswer(ctx, chunk, string(respBytes), fmt.Sprintf("%s%d", featureBlur, requestType)); err != nil {
+	if err = a.cache.SetAnswer(ctx, chunk, string(respBytes), fmt.Sprintf("%s%d", featureBlur, requestType)); err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to set answer in cache, index=%d", index)
 	}
 }
@@ -224,7 +232,7 @@ type ReplaceResponseGPT struct {
 	Result []Replacement `json:"result"`
 }
 
-func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
+func (a *AI) Replace(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var req ReplaceRequest
@@ -259,7 +267,7 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chunks := utils.SplitBlocksIntoChunks(req.Blocks, c.cfg.MaxTokensInChunk)
+	chunks := utils.SplitBlocksIntoChunks(req.Blocks, a.cfg.MaxTokensInChunk)
 
 	wg := &sync.WaitGroup{}
 	responsesCh := make(chan ChunkInChannelReplace)
@@ -268,7 +276,7 @@ func (c *ChatGPT) Replace(w http.ResponseWriter, r *http.Request) {
 	for i, chunk := range chunks {
 		wg.Add(1)
 		time.Sleep(time.Millisecond)
-		go c.sendChunkRequestReplace(ctx, promptFormat, requestType, chunk, i, wg, responsesCh, errorsCh)
+		go a.sendChunkRequestReplace(ctx, promptFormat, requestType, chunk, i, wg, responsesCh, errorsCh)
 	}
 
 	go func() {
@@ -323,10 +331,10 @@ type ChunkInChannelReplace struct {
 	ReplaceResponseGPT
 }
 
-func (c *ChatGPT) sendChunkRequestReplace(ctx context.Context, promptFormat string, requestType int, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelReplace, errorsCh chan<- error) {
+func (a *AI) sendChunkRequestReplace(ctx context.Context, promptFormat string, requestType int, chunk string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelReplace, errorsCh chan<- error) {
 	defer wg.Done()
 
-	answerFromCacheString, err := c.cache.GetAnswer(ctx, chunk, fmt.Sprintf("%s%d", featureReplace, requestType))
+	answerFromCacheString, err := a.cache.GetAnswer(ctx, chunk, fmt.Sprintf("%s%d", featureReplace, requestType))
 	if err != nil {
 		if !goerrors.Is(err, cache.ErrNoAnswer) {
 			errorsCh <- errors.Wrapf(err, "failed to get answer from cache, index=%d", index)
@@ -346,7 +354,7 @@ func (c *ChatGPT) sendChunkRequestReplace(ctx context.Context, promptFormat stri
 	}
 
 	prompt := fmt.Sprintf(promptFormat, chunk)
-	answer, err := sendRequest(prompt, c.cfg)
+	answer, err := a.SendRequest(prompt)
 	if err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to send chunk request, index=%d", index)
 		return
@@ -376,7 +384,7 @@ func (c *ChatGPT) sendChunkRequestReplace(ctx context.Context, promptFormat stri
 		errorsCh <- errors.Wrapf(err, "failed to marshal chunk response, index=%d", index)
 	}
 
-	if err = c.cache.SetAnswer(ctx, chunk, string(respBytes), fmt.Sprintf("%s%d", featureReplace, requestType)); err != nil {
+	if err = a.cache.SetAnswer(ctx, chunk, string(respBytes), fmt.Sprintf("%s%d", featureReplace, requestType)); err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to set answer in cache, index=%d", index)
 	}
 }
@@ -387,4 +395,22 @@ func joinResponsesReplace(responses []ChunkInChannelReplace) ReplaceResponseGPT 
 		resp.Result = append(resp.Result, response.Result...)
 	}
 	return resp
+}
+
+func (a *AI) SendRequest(prompt string) (string, error) {
+	var (
+		answer string
+		err    error
+	)
+
+	switch a.kind {
+	case TypeChatGPT:
+		answer, err = chatgpt.SendRequest(prompt, a.cfg)
+	case TypeDeepseek:
+		answer, err = deepseek.SendRequest(prompt, a.cfg)
+	default:
+		answer, err = "", fmt.Errorf("unknown AI type: %s", a.kind)
+	}
+
+	return answer, err
 }
