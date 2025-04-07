@@ -140,7 +140,7 @@ func main() {
 	chatGPT := ai.NewAI(cfg.ChatGPT, redisCache, ai.TypeChatGPT)
 	deepseek := ai.NewAI(cfg.Deepseek, redisCache, ai.TypeDeepseek)
 
-	easyOcr := easy_ocr.NewEasyOcr(minioClient, cfg.EasyOcr, cfg.Minio)
+	easyOcr := easy_ocr.NewEasyOcr(minioClient, cfg.EasyOcr, cfg.Minio, redisCache)
 
 	// entities
 	// =================================================================================================================
