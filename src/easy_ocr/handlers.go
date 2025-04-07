@@ -82,6 +82,10 @@ func (e *EasyOcr) ProcessImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if easyOcrResp.BlurredImage == "" {
+		if err = e.cache.SetAnswer(ctx, string(imageBytes), "", featureProcessImage); err != nil {
+			utils.LogError(ctx, err, "failed to cache answer")
+		}
+
 		resp := ProcessImageResponse{Image: ""}
 		if err = json.NewEncoder(w).Encode(resp); err != nil {
 			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
