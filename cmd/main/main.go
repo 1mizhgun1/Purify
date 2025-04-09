@@ -166,6 +166,7 @@ func main() {
 	r.Handle("/deepseek/replace", http.HandlerFunc(deepseek.Replace)).Methods(http.MethodPost, http.MethodOptions)
 
 	r.Handle("/process_image", http.HandlerFunc(easyOcr.ProcessImage)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/process_images", http.HandlerFunc(easyOcr.ProcessImages)).Methods(http.MethodPost, http.MethodOptions)
 
 	http.Handle("/", r)
 	server := http.Server{

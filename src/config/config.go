@@ -52,9 +52,10 @@ type MinioConfig struct {
 }
 
 type EasyOcrConfig struct {
-	Host     string `yaml:"host"`
-	Port     string `yaml:"port"`
-	Endpoint string `yaml:"endpoint"`
+	Host             string `yaml:"host"`
+	Port             string `yaml:"port"`
+	Endpoint         string `yaml:"endpoint"`
+	EndpointParallel string `yaml:"endpoint_parallel"`
 }
 
 func MustLoadConfig(path string, logger *slog.Logger) *Config {

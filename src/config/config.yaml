@@ -30,3 +30,4 @@ easy_ocr:
   host: easy_ocr
   port: 5002
   endpoint: process_image
+  endpoint_parallel: process_images_batch
