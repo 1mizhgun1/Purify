@@ -22,6 +22,7 @@ def process_single_image_worker(image_data: bytes, idx: int = None) -> dict:
         start_time = time.time()
         
         img_cv = cv2.imdecode(np.frombuffer(image_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+        img_cv = cv2.resize(img_cv, (1024, 1024))
         
         debug_path = f"debug_{idx}_{int(time.time())}.jpg" if idx is not None else f"debug_{int(time.time())}.jpg"
         cv2.imwrite(debug_path, img_cv)
