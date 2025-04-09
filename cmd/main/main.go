@@ -149,7 +149,7 @@ func main() {
 	reqIDMiddleware := middleware.CreateRequestIDMiddleware(logger)
 
 	r := mux.NewRouter().PathPrefix("/api/v1").Subrouter()
-	r.Use(reqIDMiddleware, middleware.CorsMiddleware, middleware.RecoverMiddleware)
+	r.Use(middleware.CorsMiddleware, reqIDMiddleware, middleware.RecoverMiddleware)
 
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
