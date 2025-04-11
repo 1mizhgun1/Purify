@@ -37,3 +37,18 @@ func UploadImage(ctx context.Context, minioClient *minio.Client, bucketName, obj
 
 	return nil
 }
+
+func DownloadImageFromBucket(ctx context.Context, minioClient *minio.Client, bucketName, objectName string) ([]byte, error) {
+	image, err := minioClient.GetObject(ctx, bucketName, objectName, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to download image")
+	}
+	defer image.Close()
+
+	imageBytes, err := io.ReadAll(image)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read image")
+	}
+
+	return imageBytes, nil
+}
