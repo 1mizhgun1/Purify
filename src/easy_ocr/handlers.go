@@ -129,6 +129,7 @@ func (e *EasyOcr) SwapImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 
 	imageURL := r.URL.Query().Get("originalUrl")
+	imageURL = strings.TrimLeft(imageURL, "\\")
 
 	imageBytes, err := utils.DownloadImage(imageURL)
 	if err != nil {
