@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 var (
@@ -139,6 +140,46 @@ func FindSubstrings(block string, substrings []string) []string {
 		if strings.Contains(block, sub) {
 			result = append(result, sub)
 		}
+	}
+
+	return result
+}
+
+func SplitBlocks(blocks []string, minTokens int, maxTokens int) [][]string {
+	var result [][]string
+	var currentBlock []string
+	currentLength := 0
+
+	for _, block := range blocks {
+		blockLength := utf8.RuneCountInString(block)
+
+		if blockLength >= minTokens {
+			// Нормальный блок — укладываемся в обычные правила
+			if currentLength+blockLength > maxTokens {
+				if len(currentBlock) > 0 {
+					result = append(result, currentBlock)
+				}
+				currentBlock = []string{block}
+				currentLength = blockLength
+			} else {
+				currentBlock = append(currentBlock, block)
+				currentLength += blockLength
+			}
+		} else {
+			// Маленький блок — добавим к предыдущему, даже если переполняем
+			if len(currentBlock) == 0 && len(result) > 0 {
+				// Присоединяем к последнему результату
+				last := result[len(result)-1]
+				result[len(result)-1] = append(last, block)
+			} else {
+				currentBlock = append(currentBlock, block)
+				currentLength += blockLength
+			}
+		}
+	}
+
+	if len(currentBlock) > 0 {
+		result = append(result, currentBlock)
 	}
 
 	return result

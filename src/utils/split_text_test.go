@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -46,4 +47,24 @@ func TestFindSubstrings(t *testing.T) {
 	for _, subs := range result {
 		fmt.Printf("%v\n", subs)
 	}
+}
+
+func TestSplitBlocks(t *testing.T) {
+	blocks := []string{
+		"123",
+		"Lorem ipsum dolor sit amet blablablablablabla",
+		"123",
+		"dshfksdjhvk jghsdkvskjd kjhsdkjvndk hkjsdhfjnwesln",
+		"sjdkvsdjk jknvsd",
+		"sdvvs klmvd",
+		"a",
+		"b",
+		"123",
+		"xdfcghjk,lkmnjbhvgcfdghjklkjnbhvgcfxdcghjm,",
+	}
+	minTokens := 5
+	maxTokens := 30
+	chunks := SplitBlocks(blocks, minTokens, maxTokens)
+	bytes, _ := json.Marshal(chunks)
+	fmt.Printf("%s\n", string(bytes))
 }

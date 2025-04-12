@@ -39,12 +39,14 @@ type MistralAIConfig struct {
 }
 
 type AIConfig struct {
-	BaseURL          string `yaml:"base_url"`
-	CompletionsURL   string `yaml:"completions_url"`
-	Model            string `yaml:"model"`
-	WordsInChunk     int    `yaml:"words_in_chunk"`      // for blur
-	MaxChunks        int    `yaml:"max_chunks"`          // for blur
-	MaxTokensInChunk int    `yaml:"max_tokens_in_chunk"` // for replace
+	BaseURL                  string `yaml:"base_url"`
+	CompletionsURL           string `yaml:"completions_url"`
+	Model                    string `yaml:"model"`
+	WordsInChunk             int    `yaml:"words_in_chunk"`      // for blur
+	MaxChunks                int    `yaml:"max_chunks"`          // for blur
+	MaxTokensInChunk         int    `yaml:"max_tokens_in_chunk"` // for replace
+	SimplifyMinTokensInChunk int    `yaml:"simplify_min_tokens_in_chunk"`
+	SimplifyMaxTokensInChunk int    `yaml:"simplify_max_tokens_in_chunk"`
 }
 
 type MinioConfig struct {

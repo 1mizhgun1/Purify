@@ -161,6 +161,7 @@ func main() {
 
 	r.Handle("/blur", http.HandlerFunc(chatGPT.Blur)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/replace", http.HandlerFunc(chatGPT.Replace)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/simplify", http.HandlerFunc(chatGPT.Simplify)).Methods(http.MethodPost, http.MethodOptions)
 
 	r.Handle("/deepseek/blur", http.HandlerFunc(deepseek.Blur)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/deepseek/replace", http.HandlerFunc(deepseek.Replace)).Methods(http.MethodPost, http.MethodOptions)
