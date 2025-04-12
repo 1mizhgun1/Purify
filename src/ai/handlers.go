@@ -39,7 +39,7 @@ var (
 	changeAgitationPrompt     = "Найди в тексте негативную агитацию и скажи, на что её исправить. При этом не нужно менять смысл на положительный, нужно лишь сгладить негатив. Все остальные негативные моменты, не связанные с агитацией, исправлять не нужно. Если в тексте нет агитации, то не нужно исправлять ничего. В ответе напиши только результат, что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\"}] Текст: %s"
 	changeAllPrompt           = "Найди в тексте негативную предвзятость и негативную агитацию и скажи, на что их исправить. При этом не нужно менять смысл на положительный, нужно лишь сгладить негатив. Все остальные негативные моменты, не связанные с предвзятостью или агитацией, исправлять не нужно. Если в тексте нет предвзятости и агитации, то не нужно исправлять ничего. В ответе напиши только результат что на что нужно заменить в тексте, и ничего лишнего. Формат ответа: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\",\\\"type\\\":1}] где type=1 - замена предвзятости, type=2 - замена агитации Текст: %s"
 
-	simplifyTextPrompt = "Я даю тебе набор блоков текста, для каждого блока тебе нужно: 1) оценить сложность текста по шкале от 1 до 10 в понимании обычного человека; 2) если сложность текста >= 6, то нужно сделать его суммаризацию и упрощение одновременно (использовать более простую лексику, термины); иначе нужно сделать только суммаризацию. Если текст не содержит смысла, либо представляет собой числа/формулы/html-код/заголовки, и вообще если текст не треубет суммаризации или упрощения - нужно оставить исходный текст без изменений, при этом тоже вернуть его в ответе. То есть на каждый блок из запроса в любом случае должен быть ответ, даже если они совпадают, чтобы число блоков в запросе и ответе было одинаковым. Формат входных данных: [\\\"текст 1\\\", \\\"текст 2\\\"] ; формат выходных даных: [\\\"результат для текста 1\\\", \\\"результат для текста 2\\\"] . Напиши только ответ в заданном формате и ничего лишнего, используй обычные двойные кавычки, не пиши в ответе сложность, только текста. Входные данные (блоки) для работы: %s"
+	simplifyTextPrompt = "Я даю тебе набор блоков текста, для каждого блока тебе нужно: 1) оценить сложность текста по шкале от 1 до 10 в понимании обычного человека; 2) если сложность текста >= 6, то нужно сделать его суммаризацию и упрощение одновременно (использовать более простую лексику, термины); иначе нужно сделать только суммаризацию. Если текст не содержит смысла, либо представляет собой числа/формулы/html-код/заголовки, и вообще если текст не треубет суммаризации или упрощения - нужно оставить исходный текст без изменений. Формат входных данных: [\\\"текст 1\\\", \\\"текст 2\\\"] ; формат выходных даных: [{\\\"from\\\":\\\"sometext\\\",\\\"to\\\":\\\"othertext\\\"}] . Напиши только ответ в заданном формате и ничего лишнего, используй обычные двойные кавычки, не пиши в ответе сложность, только текста. Входные данные (блоки) для работы: %s"
 
 	replacerReq  = strings.NewReplacer(`"`, `\\\"`)
 	replacerResp = strings.NewReplacer(`\"`, `"`)
@@ -424,7 +424,12 @@ type SimplifyRequest struct {
 }
 
 type SimplifyResponse struct {
-	Blocks []string `json:"blocks"`
+	Result []SimplifyReplacement `json:"result"`
+}
+
+type SimplifyReplacement struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 func (a *AI) Simplify(w http.ResponseWriter, r *http.Request) {
@@ -484,17 +489,19 @@ end:
 }
 
 type ChunkInChannelSimplify struct {
-	Blocks []string `json:"blocks"`
-	Index  int      `json:"index"`
+	SimplifyResponse
+	Index int `json:"index"`
 }
 
 func (a *AI) sendChunkRequestSimplify(ctx context.Context, promptFormat string, chunkSlice []string, index int, wg *sync.WaitGroup, responses chan<- ChunkInChannelSimplify, errorsCh chan<- error) {
 	defer wg.Done()
 
+	defaultResp := ChunkInChannelSimplify{Index: index}
+
 	chunkBytes, err := json.Marshal(chunkSlice)
 	if err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to marshal chunk slice")
-		responses <- ChunkInChannelSimplify{Blocks: chunkSlice, Index: index}
+		responses <- defaultResp
 	}
 	chunk := string(chunkBytes)
 
@@ -509,7 +516,7 @@ func (a *AI) sendChunkRequestSimplify(ctx context.Context, promptFormat string, 
 		fmt.Printf("[DEBUG] answer from cache, index=%d\n]", index)
 
 		var answerFromCache ChunkInChannelSimplify
-		if err = json.Unmarshal([]byte(answerFromCacheString), &answerFromCache.Blocks); err != nil {
+		if err = json.Unmarshal([]byte(answerFromCacheString), &answerFromCache.Result); err != nil {
 			errorsCh <- errors.Wrapf(err, "failed to unmarshal answer from cache, index=%d", index)
 		}
 		answerFromCache.Index = index
@@ -534,7 +541,7 @@ func (a *AI) sendChunkRequestSimplify(ctx context.Context, promptFormat string, 
 	fmt.Printf("[DEBUG] i=%d answer=%s\n", index, answer)
 
 	var resp ChunkInChannelSimplify
-	if err = json.Unmarshal([]byte(answer), &resp.Blocks); err != nil {
+	if err = json.Unmarshal([]byte(answer), &resp.Result); err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to unmarshal chunk response, index=%d", index)
 		return
 	}
@@ -542,7 +549,7 @@ func (a *AI) sendChunkRequestSimplify(ctx context.Context, promptFormat string, 
 	resp.Index = index
 	responses <- resp
 
-	respBytes, err := json.Marshal(resp.Blocks)
+	respBytes, err := json.Marshal(resp.Result)
 	if err != nil {
 		errorsCh <- errors.Wrapf(err, "failed to marshal chunk response, index=%d", index)
 	}
@@ -557,9 +564,9 @@ func joinResponsesSimplify(responses []ChunkInChannelSimplify) SimplifyResponse 
 		return responses[i].Index < responses[j].Index
 	})
 
-	resp := SimplifyResponse{Blocks: make([]string, 0)}
+	resp := SimplifyResponse{Result: make([]SimplifyReplacement, 0)}
 	for _, response := range responses {
-		resp.Blocks = append(resp.Blocks, response.Blocks...)
+		resp.Result = append(resp.Result, response.Result...)
 	}
 
 	return resp
