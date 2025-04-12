@@ -165,6 +165,7 @@ func main() {
 
 	r.Handle("/deepseek/blur", http.HandlerFunc(deepseek.Blur)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/deepseek/replace", http.HandlerFunc(deepseek.Replace)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/deepseek/simplify", http.HandlerFunc(deepseek.Simplify)).Methods(http.MethodPost, http.MethodOptions)
 
 	r.Handle("/process_image", http.HandlerFunc(easyOcr.ProcessImage)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/process_images", http.HandlerFunc(easyOcr.ProcessImages)).Methods(http.MethodPost, http.MethodOptions)
