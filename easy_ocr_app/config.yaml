@@ -1,0 +1,17 @@
+model_path:
+  "best_model.pth"
+
+model_cigarette_detection_path:
+  "weights.pt"
+
+num_classes:
+  6
+
+class_names:
+  ["dick", "drawings", "hentai", "neutral", "porn", "sexy"]
+
+probabilty_threshold:
+  0.8
+
+detection_threshold:
+  0.3

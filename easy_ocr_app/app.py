@@ -10,11 +10,30 @@ from make_inference import (
     get_image_results_batch,
     parse_ocr_result_batch,
     preprocess_batch_images,
-    logger
+    process_single_result,
+    logger,
+    model_cigarette_detection,
+    detection_threshold
 )
 
 app = Flask(__name__)
 executor = ThreadPoolExecutor(max_workers=20)
+
+def detect_and_blur_cigarettes(image: np.ndarray,
+                               confidence_threshold: float = detection_threshold) -> np.ndarray:
+    """Детектирует и размывает сигареты на изображении"""
+    results = model_cigarette_detection(image)
+
+    blurred_image = image.copy()
+
+    for *xyxy, conf, cls in results.xyxy[0]:
+        logger.info(f'Confidence: {conf}')
+        if conf > confidence_threshold:
+            x1, y1, x2, y2 = map(int, xyxy)
+            roi = blurred_image[y1:y2, x1:x2]
+            blurred_roi = cv2.GaussianBlur(roi, (451, 451), 0)
+            blurred_image[y1:y2, x1:x2] = blurred_roi
+    return blurred_image
 
 def process_single_image_worker(image_data: bytes, idx: int = None) -> dict:
     """Функция для обработки одного изображения в потоке"""
@@ -23,23 +42,28 @@ def process_single_image_worker(image_data: bytes, idx: int = None) -> dict:
         
         img_cv = cv2.imdecode(np.frombuffer(image_data, dtype=np.uint8), cv2.IMREAD_COLOR)
         img_cv = cv2.resize(img_cv, (1024, 1024))
-        
+
+        img_no_cigarettes = detect_and_blur_cigarettes(img_cv)
+
         debug_path = f"debug_{idx}_{int(time.time())}.jpg" if idx is not None else f"debug_{int(time.time())}.jpg"
-        cv2.imwrite(debug_path, img_cv)
-        logger.info(f"Image {idx} saved to {debug_path}")
+        cv2.imwrite(debug_path, img_no_cigarettes)
+        logger.info(f"Image {idx} (no cigarettes) saved to {debug_path}")
         
-        ocr_results = get_image_results(img_cv)
-        bboxes, combined_text, blurred_base64 = parse_ocr_result(ocr_results, img_cv.copy())
-        
+        ocr_results = get_image_results(img_no_cigarettes)
+        # bboxes, combined_text, blurred_base64 = parse_ocr_result(ocr_results, img_cv.copy())
+        result = process_single_result(ocr_results, img_no_cigarettes.copy(), idx, debug_dir="debug")
         processing_time = time.time() - start_time
         logger.info(f"Image {idx} processed in {processing_time:.2f}s")
         
         return {
-            "bboxes": bboxes,
-            "text": combined_text,
-            "blurred_image": blurred_base64,
+            **result,
             "processing_time": processing_time,
-            "status": "success"
+            "status": "success",
+            "image_index": idx,
+            "cigarette_detection": {
+                "status": "processed",
+                "debug_image": debug_path
+            }
         }
         
     except Exception as e:
@@ -65,22 +89,29 @@ def process_single_image():
         
         image_data = np.frombuffer(base64.b64decode(data['image']), dtype=np.uint8)
         img_cv = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+        img_cv = cv2.resize(img_cv, (1024, 1024))
+
+        img_no_cigarettes = detect_and_blur_cigarettes(img_cv)
         
         debug_path = f"debug_original_{int(time.time())}.jpg"
-        cv2.imwrite(debug_path, img_cv)
-        logger.info(f"Original image saved to {debug_path}")
+        cv2.imwrite(debug_path, img_no_cigarettes)
+        logger.info(f"Image (no cigarettes) saved to {debug_path}")
         
         ocr_results = get_image_results(img_cv)
-        bboxes, combined_text, blurred_base64 = parse_ocr_result(ocr_results, img_cv.copy())
-        
+        result = process_single_result(ocr_results, img_no_cigarettes.copy(), None, debug_dir="debug")
+        # bboxes, combined_text, blurred_base64 = parse_ocr_result(ocr_results, img_cv.copy())
         logger.info(f"Processing time: {time.time()-start_time:.2f}s")
         
         return jsonify({
-            "bboxes": bboxes,
-            "text": combined_text,
-            "blurred_image": blurred_base64,
-            "processing_time": time.time() - start_time
+            **result,
+            "processing_time": time.time() - start_time,
+            "status": "success",
+            "cigarette_detection": {
+                "status": "processed",
+                "debug_image": debug_path
+            }
         })
+        
         
     except Exception as e:
         logger.error(f"Single image processing error: {str(e)}")

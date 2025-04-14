@@ -2,7 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Dev
 # COPY ./requirements.txt .
+
+# Prod
 COPY /nlp_words_app/requirements.txt .
 
 RUN apt-get update && \

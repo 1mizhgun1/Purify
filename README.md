@@ -115,14 +115,14 @@ docker run -p 5002:5002 ocr-app
 curl -X POST \
   http://localhost:5002/process_image \
   -H "Content-Type: application/json" \
-  -d "{\"image\": \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8305.JPG | tr -d '\n')\"}"
+  -d "{\"image\": \"$(base64 -i /Users/chervonikov_alexey/Desktop/mat_image.jpg | tr -d '\n')\"}"
 
 # Несколько изображений
 curl -X POST \
   http://localhost:5002/process_images_batch \
   -H "Content-Type: application/json" \
   -w "\n" \
-  -d "{\"images\": [\"$(base64 -i /Users/chervonikov_alexey/Desktop/projects/Technopark_Spring_2025/diploma_project/easyocr/invalid_images/IMG_8329.JPG | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/2025-04-05_16.18.59.jpg | tr -d '\n')\"]}"
+  -d "{\"images\": [\"$(base64 -i /Users/chervonikov_alexey/Desktop/projects/Technopark_Spring_2025/diploma_project/porn/dick.jpeg | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/projects/Technopark_Spring_2025/diploma_project/porn/mike.jpeg | tr -d '\n')\"]}"
 
 # В несколько потоков
 curl -X POST \
@@ -132,7 +132,7 @@ curl -X POST \
   -d "{\"images\": [\"$(base64 -i /Users/chervonikov_alexey/Desktop/projects/Technopark_Spring_2025/diploma_project/easyocr/invalid_images/IMG_8329.JPG | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/2025-04-05_16.18.59.jpg | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8346.JPG | tr -d '\n')\"]}"
 ```
 
-
+docker cp adc35cab1012:/app/debug_batch_1_1744633859.jpg ~/Downloads/
 
 ## Наш оберег
 
