@@ -44,7 +44,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install easyocr
 
 COPY ./easy_ocr_app/weights_config/adults_content_recognition/best_model.pth .
-COPY .//easy_ocr_app/weights_config/cigarettes_detection/weights.pt .
+COPY ./easy_ocr_app/weights_config/cigarettes_detection/weights.pt .
 COPY ./easy_ocr_app/app.py .
 COPY ./easy_ocr_app/make_inference.py .
 COPY ./easy_ocr_app/config.yaml .
