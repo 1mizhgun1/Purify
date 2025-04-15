@@ -65,6 +65,7 @@ def process_single_image():
         
         image_data = np.frombuffer(base64.b64decode(data['image']), dtype=np.uint8)
         img_cv = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+        img_cv = cv2.resize(img_cv, (1024, 1024))
         
         debug_path = f"debug_original_{int(time.time())}.jpg"
         cv2.imwrite(debug_path, img_cv)
