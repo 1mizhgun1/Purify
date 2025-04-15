@@ -115,7 +115,7 @@ docker run -p 5002:5002 ocr-app
 curl -X POST \
   http://localhost:5002/process_image \
   -H "Content-Type: application/json" \
-  -d "{\"image\": \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8305.JPG | tr -d '\n')\"}"
+  -d "{\"image\": \"$(base64 -i /Users/chervonikov_alexey/Desktop/mat_image.jpg | tr -d '\n')\"}"
 
 # Несколько изображений
 curl -X POST \
