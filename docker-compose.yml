@@ -92,6 +92,31 @@ services:
     networks:
       - purify-network
 
+  nginx:
+    container_name: nginx
+    image: nginx
+    volumes:
+      - type: bind
+        source: /etc/letsencrypt/live/purify.pro/fullchain.pem
+        target: /etc/letsencrypt/live/purify.pro/fullchain.pem
+      - type: bind
+        source: /etc/letsencrypt/live/purify.pro/privkey.pem
+        target: /etc/letsencrypt/live/purify.pro/privkey.pem
+      - type: bind
+        source: /var/log/nginx/
+        target: /var/log/nginx/
+      - type: bind
+        source: /opt/public/
+        target: /opt/public/
+      - type: bind
+        source: ./nginx.conf
+        target: /etc/nginx/nginx.conf
+    ports:
+      - "443:443"
+      - "80:80"
+    networks:
+      - purify-network
+
 networks:
   purify-network:
     name: purify-network

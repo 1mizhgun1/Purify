@@ -84,8 +84,6 @@ func processImages(images [][]byte, cfg config.EasyOcrConfig) (processImagesResp
 		return processImagesResponse{}, errors.Wrap(err, "failed to marshal request body")
 	}
 
-	fmt.Println(string(requestBodyBytes))
-
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(requestBodyBytes))
 	if err != nil {
 		return processImagesResponse{}, errors.Wrap(err, "failed to create request")
