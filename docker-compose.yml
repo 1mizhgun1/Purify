@@ -31,7 +31,7 @@ services:
     env_file:
       - .env
     ports:
-      - "5001:5001"
+      - "127.0.0.1:5001:5001"
     restart: unless-stopped
     environment:
       - REDIS_HOST=redis
@@ -51,7 +51,7 @@ services:
     env_file:
       - .env
     ports:
-      - "5002:5002"
+      - "127.0.0.1:5002:5002"
     restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
@@ -73,7 +73,7 @@ services:
       - redis-data:/data
     command: [ "redis-server", "/etc/redis/redis.conf" ]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     networks:
       - purify-network
 
@@ -81,8 +81,8 @@ services:
     image: minio/minio:latest
     container_name: minio
     ports:
-      - "9000:9000"       # API
-      - "9001:9001"       # Web UI
+      - "127.0.0.1:9000:9000"       # API
+      - "9001:9001"                 # Web UI
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
