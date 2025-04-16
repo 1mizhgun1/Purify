@@ -96,12 +96,12 @@ services:
     container_name: nginx
     image: nginx
     volumes:
-#      - type: bind
-#        source: /etc/letsencrypt/live/purify.pro/fullchain.pem
-#        target: /etc/letsencrypt/live/purify.pro/fullchain.pem
-#      - type: bind
-#        source: /etc/letsencrypt/live/purify.pro/privkey.pem
-#        target: /etc/letsencrypt/live/purify.pro/privkey.pem
+      - type: bind
+        source: /etc/letsencrypt/live/purify.pro/fullchain.pem
+        target: /etc/letsencrypt/live/purify.pro/fullchain.pem
+      - type: bind
+        source: /etc/letsencrypt/live/purify.pro/privkey.pem
+        target: /etc/letsencrypt/live/purify.pro/privkey.pem
       - type: bind
         source: /var/log/nginx/
         target: /var/log/nginx/
