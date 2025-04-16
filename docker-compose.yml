@@ -95,6 +95,9 @@ services:
   nginx:
     container_name: nginx
     image: nginx
+    depends_on:
+      main:
+        condition: service_started
     volumes:
       - type: bind
         source: /etc/letsencrypt/live/purify.pro/fullchain.pem
