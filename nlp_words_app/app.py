@@ -3,7 +3,14 @@ from utils import *
 from flask_cors import CORS
 
 app = Flask(__name__)
-cors = CORS(app)
+
+CORS(app, resources={r"/*": {
+    "origins": "*",
+    "methods": ["GET", "POST", "PUT", "DELETE"],
+    "allow_headers": ["Content-Type"],
+    "supports_credentials": True,
+    "max_age": 86400
+}})
 
 @app.route('/analyze', methods=['POST'])
 def analyze_text():
