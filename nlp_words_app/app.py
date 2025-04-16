@@ -1,18 +1,13 @@
 from flask import Flask, request, jsonify
 from utils import *
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 
 app = Flask(__name__)
-
-CORS(app, resources={r"/*": {
-    "origins": "*",
-    "methods": ["GET", "POST", "PUT", "DELETE"],
-    "allow_headers": ["Content-Type"],
-    "supports_credentials": True,
-    "max_age": 86400
-}})
+cors = CORS(app)
+app.config['CORS_HEADERS'] = 'Content-Type'
 
 @app.route('/analyze', methods=['POST'])
+@cross_origin()
 def analyze_text():
     try:
         data = request.get_json()
