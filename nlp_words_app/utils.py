@@ -124,8 +124,8 @@ def get_negative_words(text):
         
         word_upd = normalize_word(word).strip()
 
-        cache_logger.debug("")
-        cache_logger.debug(f"{word}: {word_upd}")
+        # cache_logger.debug("")
+        # cache_logger.debug(f"{word}: {word_upd}")
 
         lemma = get_lemma(word_upd)
         
@@ -133,10 +133,10 @@ def get_negative_words(text):
             continue
 
         tag = get_word_tag(word_upd, lemma)
-        cache_logger.debug(f"Lemma: {lemma}")
-        cache_logger.debug(f"Tag: {tag}")
-        cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
-        cache_logger.debug("")
+        # cache_logger.debug(f"Lemma: {lemma}")
+        # cache_logger.debug(f"Tag: {tag}")
+        # cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
+        # cache_logger.debug("")
         
         if tag == 'NGTV':
             negative_words.add(word)

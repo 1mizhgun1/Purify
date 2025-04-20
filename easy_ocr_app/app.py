@@ -1,244 +1,160 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, HTTPException, Request
 import base64
 import numpy as np
 import cv2
-import time
+import asyncio
+from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from make_inference import (
     get_image_results,
     parse_ocr_result,
-    get_image_results_batch,
-    parse_ocr_result_batch,
-    preprocess_batch_images,
+    detect_and_blur_cigarettes,
+    predict_image_adult_content,
+    probability_threshold,
     logger
 )
+import time
+from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+import asyncio
 
-app = Flask(__name__)
-executor = ThreadPoolExecutor(max_workers=20)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Replace @app.on_event("startup") and @app.on_event("shutdown")"""
+    asyncio.create_task(worker())  
+    logger.info("Application startup complete")
+    yield
+    logger.info("Application shutting down")
 
-def process_single_image_worker(image_data: bytes, idx: int = None) -> dict:
-    """Функция для обработки одного изображения в потоке"""
+app = FastAPI(lifespan=lifespan)
+request_queue = asyncio.Queue(maxsize=100)  
+executor = ThreadPoolExecutor(max_workers=20)  
+
+async def worker():
+    """Background task processor"""
+    while True:
+        try:
+            image_data, response_future = await request_queue.get()
+            result = await process_image_async(image_data)
+            response_future.set_result(result)
+        except Exception as e:
+            response_future.set_exception(e)
+        finally:
+            request_queue.task_done()
+
+async def process_image_async(image_data: bytes) -> dict:
+    loop = asyncio.get_event_loop()
+    
     try:
-        start_time = time.time()
+        result = await loop.run_in_executor(
+            executor,
+            lambda: process_image_sync(image_data)
+        )
+        return result
         
-        img_cv = cv2.imdecode(np.frombuffer(image_data, dtype=np.uint8), cv2.IMREAD_COLOR)
-        img_cv = cv2.resize(img_cv, (1024, 1024))
+    except Exception as e:
+        logger.error(f"Async processing error: {str(e)}")
+        raise
+
+def process_image_sync(image_data: bytes) -> dict:
+    def unified_image_processing(img_data: bytes, target_size=(1024, 1024)):
+        """Унифицированная обработка изображения с контролем цветового пространства"""
+        try:
+            img_cv = cv2.imdecode(np.frombuffer(img_data, dtype=np.uint8), cv2.IMREAD_COLOR)
+            if img_cv is None:
+                raise ValueError("Failed to decode original image")
+
+            original_h, original_w = img_cv.shape[:2]
+
+            original_bgr = img_cv.copy()
+
+            img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+
+            _, buffer = cv2.imencode('.jpg', img_rgb, [cv2.IMWRITE_JPEG_QUALITY, 100])
+            
+            processed_img = cv2.imdecode(np.frombuffer(buffer.tobytes(), dtype=np.uint8), cv2.IMREAD_COLOR)
+            processed_img = cv2.cvtColor(processed_img, cv2.COLOR_BGR2RGB) 
+
+            if target_size:
+                processed_img = cv2.resize(processed_img, target_size, interpolation=cv2.INTER_LINEAR)
+
+            return processed_img, original_bgr, (original_w, original_h)
+
+        except Exception as e:
+            logger.error(f"Image processing error: {str(e)}", exc_info=True)
+            raise
+
+    try:
+        processed_img, original_bgr, (orig_w, orig_h) = unified_image_processing(image_data)
+
+        adult_class, adult_prob = predict_image_adult_content(
+            cv2.cvtColor(original_bgr, cv2.COLOR_BGR2RGB)  
+        )
         
-        debug_path = f"debug_{idx}_{int(time.time())}.jpg" if idx is not None else f"debug_{int(time.time())}.jpg"
-        cv2.imwrite(debug_path, img_cv)
-        logger.info(f"Image {idx} saved to {debug_path}")
+        is_adult = adult_class in ["hentai", "porn", "sexy", 'dick'] and adult_prob >= probability_threshold
         
-        ocr_results = get_image_results(img_cv)
-        bboxes, combined_text, blurred_base64 = parse_ocr_result(ocr_results, img_cv.copy())
+        if is_adult:
+            logger.warning(f"Adult content detected: {adult_class} (prob: {adult_prob:.2f})")
+            debug_path = f"debug_{int(time.time())}_initial_adult.jpg"
+            cv2.imwrite(filename=debug_path, img=cv2.cvtColor(original_bgr, cv2.COLOR_BGR2RGB))
+            logger.info(f"Saved debug image to {debug_path}")
+            blurred = cv2.GaussianBlur(original_bgr, (1025, 1025), 0)  # Работаем с BGR
+            _, buffer = cv2.imencode('.jpg', blurred)
+            debug_path = f"debug_{int(time.time())}_blurred_adult.jpg"
+            cv2.imwrite(filename=debug_path, img=blurred)
+            logger.info(f"Saved debug image to {debug_path}")
+            return {
+                "bboxes": [],
+                "text": "",
+                "blurred_image": base64.b64encode(buffer).decode('utf-8'),
+                "status": "success"
+            }
+
+        img_with_cigarettes = detect_and_blur_cigarettes(processed_img.copy())
+
+        ocr_results, final_img = get_image_results(img_with_cigarettes.copy())
+
+        bboxes, text, blurred_b64 = parse_ocr_result(ocr_results, final_img)
+
+        blurred_cv = cv2.imdecode(np.frombuffer(base64.b64decode(blurred_b64), dtype=np.uint8), cv2.IMREAD_COLOR)
+        blurred_cv = cv2.resize(blurred_cv, (orig_w, orig_h))
         
-        processing_time = time.time() - start_time
-        logger.info(f"Image {idx} processed in {processing_time:.2f}s")
-        
+        _, buffer = cv2.imencode('.jpg', blurred_cv)
+        debug_path = f"debug_{int(time.time())}_blurred_final.jpg"
+        cv2.imwrite(img=blurred_cv, filename=debug_path)
+
         return {
             "bboxes": bboxes,
-            "text": combined_text,
-            "blurred_image": blurred_base64,
-            "processing_time": processing_time,
+            "text": text,
+            "blurred_image": base64.b64encode(buffer).decode('utf-8'),
             "status": "success"
         }
-        
-    except Exception as e:
-        logger.error(f"Error processing image {idx}: {str(e)}")
-        return {
-            "error": str(e),
-            "status": "error",
-            "image_index": idx
-        }
 
-@app.route('/process_image', methods=['POST'])
-def process_single_image():
-    """Обработка одного изображения (старый эндпоинт для совместимости)"""
-    logger.info("Received single image request")
-    data = request.get_json()
-    
-    if not data or 'image' not in data:
-        logger.error("No image provided")
-        return jsonify({"error": "No image provided"}), 400
-    
-    try:
-        start_time = time.time()
-        
-        image_data = np.frombuffer(base64.b64decode(data['image']), dtype=np.uint8)
-        img_cv = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
-        
-        debug_path = f"debug_original_{int(time.time())}.jpg"
-        cv2.imwrite(debug_path, img_cv)
-        logger.info(f"Original image saved to {debug_path}")
-        
-        ocr_results = get_image_results(img_cv)
-        bboxes, combined_text, blurred_base64 = parse_ocr_result(ocr_results, img_cv.copy())
-        
-        logger.info(f"Processing time: {time.time()-start_time:.2f}s")
-        
-        return jsonify({
-            "bboxes": bboxes,
-            "text": combined_text,
-            "blurred_image": blurred_base64,
-            "processing_time": time.time() - start_time
-        })
-        
     except Exception as e:
-        logger.error(f"Single image processing error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Full processing pipeline error: {str(e)}", exc_info=True)
+        return {"error": str(e), "status": "error"}
 
-@app.route('/process_images_batch', methods=['POST'])
-def process_images_batch():
-    """Обработка батча изображений (новый эндпоинт)"""
-    logger.info("Received batch processing request")
-    data = request.get_json()
-    
-    if not data or 'images' not in data:
-        logger.error("No images array provided")
-        return jsonify({"error": "No images provided"}), 400
-    
-    if not isinstance(data['images'], list):
-        logger.error("Images should be provided as array")
-        return jsonify({"error": "Images should be provided as array"}), 400
-    
+@app.post('/process_image')
+async def process_image(request: Request):
     try:
-        start_time = time.time()
-        base64_images = data['images']
-        
-        MAX_BATCH_SIZE = 32
-        if len(base64_images) > MAX_BATCH_SIZE:
-            logger.warning(f"Batch size too large ({len(base64_images)}), truncating to {MAX_BATCH_SIZE}")
-            base64_images = base64_images[:MAX_BATCH_SIZE]
-        
-        images_array = preprocess_batch_images(base64_images)
-        logger.info(f"Preprocessed {len(images_array)} images in {time.time()-start_time:.2f}s")
-        
-        ocr_results = get_image_results_batch(images_array)
-        logger.info(f"Batch OCR completed in {time.time()-start_time:.2f}s")
-        
-        batch_results = parse_ocr_result_batch(ocr_results, images_array)
-        
-        for idx, img in enumerate(images_array):
-            debug_path = f"debug_batch_{idx}_{int(time.time())}.jpg"
-            cv2.imwrite(debug_path, img)
-        
-        logger.info(f"Total processing time: {time.time()-start_time:.2f}s")
-        
-        return jsonify({
-            "results": batch_results,
-            "processed_count": len(batch_results),
-            "success_count": sum(1 for r in batch_results if r.get("status") == "success"),
-            "processing_time": time.time() - start_time
-        })
-        
-    except Exception as e:
-        logger.error(f"Batch processing error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-    
-@app.route('/process_images_parallel', methods=['POST'])
-def process_images_parallel():
-    """Обработка нескольких изображений параллельно"""
-    logger.info("Received parallel processing request")
-    data = request.get_json()
-    
-    if not data or 'images' not in data:
-        logger.error("No images array provided")
-        return jsonify({"error": "No images provided"}), 400
-    
-    if not isinstance(data['images'], list):
-        logger.error("Images should be provided as array")
-        return jsonify({"error": "Images should be provided as array"}), 400
-    
-    try:
-        start_time = time.time()
-        base64_images = data['images']
-        
-        MAX_IMAGES = 32
-        if len(base64_images) > MAX_IMAGES:
-            logger.warning(f"Too many images ({len(base64_images)}), truncating to {MAX_IMAGES}")
-            base64_images = base64_images[:MAX_IMAGES]
-        
-        image_data_list = [base64.b64decode(img) for img in base64_images]
-        
-        futures = [executor.submit(process_single_image_worker, img_data, idx) 
-                 for idx, img_data in enumerate(image_data_list)]
-        
-        results = [future.result() for future in futures]
-        
-        success_count = sum(1 for r in results if r.get("status") == "success")
-        total_time = time.time() - start_time
-        
-        logger.info(f"Processed {len(results)} images in {total_time:.2f}s ({success_count} successes)")
-        
-        return jsonify({
-            "results": results,
-            "processed_count": len(results),
-            "success_count": success_count,
-            "processing_time": total_time
-        })
-        
-    except Exception as e:
-        logger.error(f"Parallel processing error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        data = await request.json()
+        if not data or 'image' not in data:
+            raise HTTPException(status_code=400, detail="No image provided")
 
-@app.route('/healthcheck', methods=['GET'])
-def healthcheck():
-    """Проверка работоспособности сервиса"""
-    try:
-        test_image = np.zeros((100, 100, 3), dtype=np.uint8)
-        get_image_results(test_image)
-        return jsonify({"status": "healthy", "gpu_available": torch.cuda.is_available()})
+        if request_queue.full():
+            raise HTTPException(status_code=429, detail="Server is busy. Try later.")
+
+        loop = asyncio.get_event_loop()
+        response_future = loop.create_future()  
+        image_data = base64.b64decode(data['image'])
+        
+        await request_queue.put((image_data, response_future))
+        result = await response_future  
+        
+        return JSONResponse(content=result)
     except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == '__main__':
-    import torch  
-    app.run(host='0.0.0.0', port=5002, debug=True)
-
-# from flask import Flask, request, jsonify
-# import base64
-# import numpy as np
-# import cv2
-# import io
-# from PIL import Image
-# from make_inference import get_image_results, parse_ocr_result, logger
-
-# app = Flask(__name__)
-
-# @app.route('/process_image', methods=['POST'])
-# def process_image():
-#     logger.info("Received request to /process_image")
-#     data = request.get_json()
-#     if not data or 'image' not in data:
-#         logger.error("No image provided in request")
-#         return jsonify({"error": "No image provided"}), 400
-    
-#     base64_str = data['image']
-    
-#     try:
-
-#         image_data = np.frombuffer(base64.b64decode(base64_str), dtype=np.uint8)
-#         img_cv = cv2.imdecode(image_data, cv2.IMREAD_COLOR)  
-
-#         original_path = "original_image.jpg"
-#         cv2.imwrite(original_path, img_cv)
-#         logger.info(f"Original image saved to {original_path}")
-
-#         logger.info("Prepared image...")
-#         ocr_results = get_image_results(img_cv)
-#         logger.info("OCR result collected...")
-#         bboxes, combined_text, blurred_base64 = parse_ocr_result(ocr_results, img_cv.copy())
-#         logger.info(f"Text extracted: {combined_text}")
-
-#         response_data = {
-#             "bboxes": bboxes if bboxes else [],
-#             "text": combined_text,
-#             "blurred_image": blurred_base64 if blurred_base64 else None
-#         }
-        
-#         return jsonify(response_data)
-    
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-
-# if __name__ == '__main__':
-#     app.run(host='0.0.0.0', port=5002, debug=True)
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=5002)

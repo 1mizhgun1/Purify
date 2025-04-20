@@ -56,7 +56,9 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./easy_ocr_app:/app
+      - ./easy_ocr_app/app.py:/app/app.py  
+      - ./easy_ocr_app/make_inference.py:/app/make_inference.py  
+      - ./easy_ocr_app/config.yaml:/app/config.yaml
     command: [ "python", "app.py" ]
     networks:
       - purify-network
