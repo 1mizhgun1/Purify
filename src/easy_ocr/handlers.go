@@ -138,6 +138,16 @@ func (e *EasyOcr) SwapImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	contentType := http.DetectContentType(imageBytes)
+	if contentType == "image/svg+xml" {
+		imageBytes, err = utils.SvgToPng(imageBytes)
+		if err != nil {
+			utils.LogError(ctx, err, "failed to convert svg to png")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+
 	answerFromCache, err := e.cache.GetAnswer(ctx, string(imageBytes), featureProcessImage)
 	if err != nil {
 		if !goerrors.Is(err, cache.ErrNoAnswer) {
