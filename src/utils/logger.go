@@ -37,3 +37,8 @@ func LogErrorMessage(ctx context.Context, msg string) {
 	logger := GetLoggerFromContext(ctx)
 	logger.Error(msg)
 }
+
+func Debug(ctx context.Context, msg string) {
+	logger := GetLoggerFromContext(ctx)
+	logger.Debug(msg)
+}
