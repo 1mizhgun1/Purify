@@ -140,7 +140,7 @@ func (e *EasyOcr) SwapImage(w http.ResponseWriter, r *http.Request) {
 
 	contentType := http.DetectContentType(imageBytes)
 	utils.Debug(ctx, contentType)
-	if contentType == "image/svg+xml" || contentType == "text/plain" {
+	if strings.Contains(contentType, "image/svg+xml") || strings.Contains(contentType, "text/plain") {
 		imageBytes, err = utils.SvgToPng(imageBytes)
 		if err != nil {
 			utils.LogError(ctx, err, "failed to convert svg to png")
