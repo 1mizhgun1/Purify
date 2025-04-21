@@ -17,7 +17,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/
-COPY --from=builder /purify/.bin /app/.bin
+COPY --from=builder /purify/ /app/
 
 ENV TZ="Europe/Moscow"
 EXPOSE 8080
