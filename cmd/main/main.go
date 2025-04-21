@@ -79,7 +79,7 @@ func main() {
 	}
 	defer logFile.Close()
 
-	logger := slog.New(slog.NewJSONHandler(io.MultiWriter(logFile, os.Stdout), &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := slog.New(slog.NewJSONHandler(io.MultiWriter(logFile, os.Stdout), &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	// logger
 	// =================================================================================================================
