@@ -592,11 +592,11 @@ type AnalyzeResponse struct {
 }
 
 type AnalyzeResponseAPI struct {
-	AggressiveWordsPercent int    `json:"aggressive_percent"`
-	AggitationWordsPercent int    `json:"aggitation_percent"`
-	MatWordsPercent        int    `json:"mat_percent"`
-	BiasWordsPercent       int    `json:"bias_percent"`
-	Resume                 string `json:"resume"`
+	AggressiveWordsPercent int `json:"aggressive_percent"`
+	AggitationWordsPercent int `json:"aggitation_percent"`
+	MatWordsPercent        int `json:"mat_percent"`
+	BiasWordsPercent       int `json:"bias_percent"`
+	Resume                 int `json:"resume"`
 }
 
 func (a *AI) SaveAnalytics(w http.ResponseWriter, r *http.Request) {
@@ -763,9 +763,9 @@ func calculateAnalyzeStat(responses []AnalyzeResponse) AnalyzeResponseAPI {
 		common.MatWordsPercent += response.MatWordsPercent
 		common.BiasWordsPercent += response.BiasWordsPercent
 	}
-	resume := "рекомендован"
+	resume := 0
 	if common.AggressiveWordsPercent > 15 || common.AggitationWordsPercent > 15 || common.MatWordsPercent > 10 || common.BiasWordsPercent > 20 {
-		resume = "не " + resume
+		resume = 1
 	}
 	return AnalyzeResponseAPI{
 		AggressiveWordsPercent: common.AggressiveWordsPercent / length,
