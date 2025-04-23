@@ -611,15 +611,15 @@ func (a *AI) SaveAnalytics(w http.ResponseWriter, r *http.Request) {
 
 	err := a.hasAnalyticsForURL(ctx, req.Url)
 	if err != nil {
-		fmt.Printf("[DEBUG] no analytics for url in postgres")
-	} else {
-		fmt.Printf("[DEBUG] answer from cache")
+		fmt.Printf("[DEBUG] answer from postgres", err)
 		if err := json.NewEncoder(w).Encode("ok"); err != nil {
 			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 			http.Error(w, utils.Internal, http.StatusInternalServerError)
 			return
 		}
 		return
+	} else {
+		fmt.Printf("[DEBUG] no analytics for url in postgres")
 	}
 
 	chunks := utils.SplitBlocksIntoChunks(req.Blocks, a.cfg.SimplifyMaxTokensInChunk)
