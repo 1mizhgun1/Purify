@@ -23,6 +23,11 @@
    MINIO_ROOT_PASSWORD=some_password
    MINIO_ENDPOINT=minio:9000
    MINIO_REGION=us-east-1
+
+   POSTGRES_DB=some_db
+   POSTGRES_USER=ssd
+   POSTGRES_PASSWORD=some_password
+   POSTGRES_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     ```
 
 2. При первом запуске выполнить команды:

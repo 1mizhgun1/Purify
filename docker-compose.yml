@@ -9,6 +9,8 @@ services:
         condition: service_started
       minio:
         condition: service_started
+      postgres:
+        condition: service_started
     env_file:
       - .env
     ports:
@@ -120,6 +122,23 @@ services:
     networks:
       - purify-network
 
+  postgres:
+    env_file:
+      - .env
+    container_name: postgres
+    image: postgres:16.0
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./build/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - purify-network
+
 networks:
   purify-network:
     name: purify-network
@@ -128,3 +147,4 @@ networks:
 volumes:
   redis-data:
   minio_data:
+  postgres-data:

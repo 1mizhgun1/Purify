@@ -11,14 +11,16 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
 	"purify/src/ai"
 	"purify/src/cache"
 	"purify/src/config"
 	"purify/src/easy_ocr"
 	"purify/src/middleware"
 	"purify/src/mistral_ai"
+
+	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
@@ -132,13 +134,30 @@ func main() {
 
 	// minio
 	// =================================================================================================================
+	// postgres
+
+	postgres, err := pgxpool.Connect(context.Background(), os.Getenv("POSTGRES_URL"))
+	if err != nil {
+		logger.Error(errors.Wrap(err, "failed to connect to postgres").Error())
+		return
+	}
+	defer postgres.Close()
+
+	if err = postgres.Ping(context.Background()); err != nil {
+		logger.Error(errors.Wrap(err, "failed to ping postgres").Error())
+		return
+	}
+	logger.Info("Postgres connected")
+
+	// postgres
+	// =================================================================================================================
 	// entities
 
 	redisCache := cache.NewCache(redisClient)
 
 	mistralAI := mistral_ai.NewMistralAI(cfg.MistralAI)
-	chatGPT := ai.NewAI(cfg.ChatGPT, redisCache, ai.TypeChatGPT)
-	deepseek := ai.NewAI(cfg.Deepseek, redisCache, ai.TypeDeepseek)
+	chatGPT := ai.NewAI(cfg.ChatGPT, redisCache, postgres, ai.TypeChatGPT)
+	deepseek := ai.NewAI(cfg.Deepseek, redisCache, postgres, ai.TypeDeepseek)
 
 	easyOcr := easy_ocr.NewEasyOcr(minioClient, cfg.EasyOcr, cfg.Minio, redisCache)
 
@@ -162,10 +181,14 @@ func main() {
 	r.Handle("/blur", http.HandlerFunc(chatGPT.Blur)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/replace", http.HandlerFunc(chatGPT.Replace)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/simplify", http.HandlerFunc(chatGPT.Simplify)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/save_analytics", http.HandlerFunc(chatGPT.SaveAnalytics)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/analytics", http.HandlerFunc(chatGPT.GetAnalytics)).Methods(http.MethodGet, http.MethodOptions)
 
 	r.Handle("/deepseek/blur", http.HandlerFunc(deepseek.Blur)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/deepseek/replace", http.HandlerFunc(deepseek.Replace)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/deepseek/simplify", http.HandlerFunc(deepseek.Simplify)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/deepseek/save_analytics", http.HandlerFunc(deepseek.SaveAnalytics)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/deepseek/analytics", http.HandlerFunc(deepseek.GetAnalytics)).Methods(http.MethodGet, http.MethodOptions)
 
 	r.Handle("/process_image", http.HandlerFunc(easyOcr.ProcessImage)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/process_images", http.HandlerFunc(easyOcr.ProcessImages)).Methods(http.MethodPost, http.MethodOptions)
