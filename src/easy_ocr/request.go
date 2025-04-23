@@ -15,7 +15,7 @@ import (
 )
 
 var client = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: 120 * time.Second,
 }
 
 type processImageResponse struct {

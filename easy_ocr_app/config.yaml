@@ -1,5 +1,5 @@
 model_path:
-  "best_model.pth"
+  "final_model.pth"
 
 model_cigarette_detection_path:
   "weights.pt"
@@ -11,7 +11,10 @@ class_names:
   ["dick", "drawings", "hentai", "neutral", "porn", "sexy"]
 
 probabilty_threshold:
-  0.8
+  0.82
 
 detection_threshold:
   0.3
+
+roboflow_model:
+  "smoke-detector-bb0pv/1"
