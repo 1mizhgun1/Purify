@@ -7,6 +7,9 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender-dev \
+    cmake \
+    g++ \
+    make \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /root/.EasyOCR/
@@ -43,7 +46,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN pip install easyocr
 
-COPY ./easy_ocr_app/weights_config/adults_content_recognition/best_model.pth .
+COPY ./easy_ocr_app/weights_config/adults_content_recognition/final_model.pth .
 COPY ./easy_ocr_app/weights_config/cigarettes_detection/weights.pt .
+
+COPY ./easy_ocr_app/app.py .
+COPY ./easy_ocr_app/make_inference.py .
 
 CMD ["python", "app.py"]

@@ -11,13 +11,17 @@ from datetime import datetime
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import List, Tuple, Dict, Any
-from torchvision.models import resnet18, ResNet18_Weights, resnet50, ResNet50_Weights
+from torchvision.models import resnet50
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 import yaml
-import contextlib
 
+import time
+import contextlib
+import warnings
+warnings.filterwarnings('ignore')
+from inference import get_model
 with open('config.yaml', 'r', encoding='utf-8') as file:
     config = yaml.safe_load(file)
 
@@ -35,6 +39,8 @@ num_classes = config['num_classes']
 class_names = config['class_names']
 probability_threshold = config['probabilty_threshold']
 detection_threshold = config['detection_threshold']
+
+roboflow_model = config['roboflow_model']
 
 def setup_logger():
     logger = logging.getLogger(__name__)
@@ -91,6 +97,65 @@ if device_gpu:
     reader.readtext_batched(warmup_batch)
     logger.info("GPU warmup completed")
 
+print(f"Recognition model is successfully loaded")
+
+DEVICE = 'cuda' if device_gpu else 'cpu'
+model_porn_classifer_resnet50 = resnet50()
+model_porn_classifer_resnet50.fc = nn.Linear(model_porn_classifer_resnet50.fc.in_features, num_classes)
+model_porn_classifer_resnet50.load_state_dict(torch.load(model_path, map_location=DEVICE))
+model_porn_classifer_resnet50 = model_porn_classifer_resnet50.to(DEVICE)
+print(f"Adult content classifier model is succesfully loaded!")
+
+with suppress_output():
+    model_cigarette_detection = torch.hub.load(
+        'ultralytics/yolov5',
+        'custom',
+        path=model_cigarette_detection_path,
+        verbose=False,
+        trust_repo=True  
+    )
+    model_cigarette_detection.eval()
+
+roboflow_model = get_model(model_id=roboflow_model, api_key = os.getenv('ROBOFLOW_API_KEY'))
+print(f"Cigarette detetction model is successfully loaded!")
+
+def detect_and_blur_cigarettes(image: np.ndarray,
+                               confidence_threshold: float = detection_threshold,
+                               blur_padding: int = 50) -> np.ndarray:
+    """Детектирует и размывает сигареты на изображении"""
+    results = roboflow_model.infer(image)[0]
+    
+    blurred_image = image.copy()
+    height, width = image.shape[:2]
+    for pred in results.predictions:
+        logger.info(f"Detection - Class: {pred.class_name}, Confidence: {pred.confidence:.2f}")
+        
+        if pred.confidence > confidence_threshold:
+            try:
+                x1 = int(pred.x - pred.width/2)
+                y1 = int(pred.y - pred.height/2)
+                x2 = int(pred.x + pred.width/2)
+                y2 = int(pred.y + pred.height/2)
+                
+                x1 = max(0, x1 - blur_padding)
+                y1 = max(0, y1 - blur_padding)
+                x2 = min(width, x2 + blur_padding)
+                y2 = min(height, y2 + blur_padding)
+                
+                roi = blurred_image[y1:y2, x1:x2]
+                blurred_roi = cv2.GaussianBlur(roi, (451, 451), 0)  
+                blurred_image[y1:y2, x1:x2] = blurred_roi
+                
+                logger.info(f"Blurred region: {x1},{y1} to {x2},{y2}")
+            except Exception as e:
+                logger.error(f"Error blurring cigarette: {str(e)}")
+    
+    # debug_path = f"debug_{int(time.time())}_cigarettes.jpg"
+    # cv2.imwrite(debug_path, blurred_image)
+    # logger.info(f"Saved debug image to {debug_path}")
+    
+    return blurred_image
+
 def predict_image_adult_content(img_cv,
                                 model = model_porn_classifer_resnet50,
                                 device=DEVICE,
@@ -131,7 +196,8 @@ def predict_image_adult_content(img_cv,
 
     predicted_probability = predicted_prob.item()
     predicted_class = class_names[predicted.item()]
-    logger.info(f"Class: {predicted_class}, Prob: {predicted_probability}")
+
+    # logger.info(f"Class: {predicted_class}, Prob: {predicted_probability}")
     if predicted_probability < probability_threshold:
         return "neutral", 0.0
 
@@ -330,6 +396,11 @@ def process_single_result(ocr_result: List[Tuple],
             cv2.imwrite(debug_final_path, blurred_image)
             debug_info["final_image"] = debug_final_path
 
+    else:
+        _, buffer = cv2.imencode('.jpg', image.copy())
+        blurred_base64 = base64.b64encode(buffer).decode('utf-8')
+
+    
     result = {
         "bboxes": bad_bboxes if bad_bboxes else [],
         "text": combined_text,
@@ -370,8 +441,9 @@ def parse_ocr_result_batch(ocr_results: List[List[Tuple]], images: np.ndarray) -
     return batch_results
 
 def get_image_results(image: np.ndarray) -> List[Tuple]:
-    """Старая функция для обработки одного изображения"""
-    return reader.readtext(image)
+    """Расширенная старая функция для обработки одного изображения"""
+    # image_no_cigarettes = detect_and_blur_cigarettes(image=image.copy())
+    return reader.readtext(image.copy()), image.copy()
 
 def parse_ocr_result(ocr_results: List[Tuple], image: np.ndarray) -> Tuple:
     """Старая функция для обработки одного результата"""

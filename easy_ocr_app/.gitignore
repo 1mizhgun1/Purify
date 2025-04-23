@@ -1,2 +1,4 @@
 /__pycache__
 /venv
+
+/weights_config/adults_content_recognition/best_model.pth
