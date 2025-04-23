@@ -622,12 +622,11 @@ func (a *AI) SaveAnalytics(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[DEBUG] no analytics for url in postgres")
 	}
 
-	chunks := utils.SplitBlocksIntoChunks(req.Blocks, a.cfg.SimplifyMaxTokensInChunk)
 	wg := &sync.WaitGroup{}
 	responsesCh := make(chan AnalyzeChunckAI)
 	errorsCh := make(chan error)
 
-	for i, chunk := range chunks {
+	for i, chunk := range req.Blocks {
 		wg.Add(1)
 		go a.sendChunkRequestAnalytics(ctx, analyzeTextPrompt, chunk, i, wg, responsesCh, errorsCh)
 	}
@@ -793,6 +792,7 @@ func (a *AI) getAnalyticsForURL(ctx context.Context, url string) ([]AnalyzeRespo
 	query := `SELECT aggressive_percent, aggitation_percent, mat_percent, bias_percent 
 				FROM url_analytics WHERE url LIKE $1`
 	rows, err := a.db.Query(ctx, query, url+"%")
+	fmt.Println(rows, err)
 	if err != nil {
 		return res, err
 	}
@@ -801,7 +801,8 @@ func (a *AI) getAnalyticsForURL(ctx context.Context, url string) ([]AnalyzeRespo
 		var r AnalyzeResponse
 		err := rows.Scan(&r.AggressiveWordsPercent, &r.AggitationWordsPercent, &r.MatWordsPercent, &r.BiasWordsPercent)
 		if err != nil {
-			return []AnalyzeResponse{}, errors.Wrap(err, "failed to parse animal")
+			fmt.Println("aaa", err)
+			return []AnalyzeResponse{}, err
 		}
 		res = append(res, r)
 	}
