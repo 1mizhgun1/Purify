@@ -44,9 +44,6 @@ type ProcessImageResponse struct {
 func (e *EasyOcr) ProcessImage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	w.Header().Del("Content-Type")
-	w.Header().Set("Content-Type", "image/png")
-
 	var req ProcessImageRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrUnmarshalRequest)
