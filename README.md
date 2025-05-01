@@ -137,7 +137,21 @@ curl -X POST \
   -d "{\"images\": [\"$(base64 -i /Users/chervonikov_alexey/Desktop/projects/Technopark_Spring_2025/diploma_project/easyocr/invalid_images/IMG_8329.JPG | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/2025-04-05_16.18.59.jpg | tr -d '\n')\", \"$(base64 -i /Users/chervonikov_alexey/Desktop/invalid_images/IMG_8346.JPG | tr -d '\n')\"]}"
 ```
 
-docker cp easy_ocr:/app/debug_1745149463_blurred_final.jpg ~/Desktop/
+8. Video Service (video_processing_service/)[тык]
+
+```bash
+# Healthcheck
+curl http://localhost:5003/health
+```
+
+```bash
+# Send video link
+curl -X POST "http://localhost:5003/transcribe" \
+     -H "Content-Type: application/json" \
+     -d '{"url":"https://ok.ru/video/42697558629", "max_duration":60}'
+```
+
+
 
 ## Наш оберег
 
