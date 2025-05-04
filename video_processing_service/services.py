@@ -7,6 +7,7 @@ import librosa
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 import logging
 from typing import Optional, Tuple
+import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -116,19 +117,26 @@ class AudioProcessor:
         except Exception as e:
             logger.error(f"Audio preprocessing failed: {str(e)}")
             raise ValueError(f"Audio preprocessing error: {str(e)}")
+    
+    def _replace_punctuation(self, text: str) -> str:
+        """Заменяет все знаки препинания на пробелы в тексте"""
+        # Расширенное регулярное выражение для пунктуации
+        punctuation_pattern = r'[\.,\/#!%\^&\*;:{}=\-_`~()\[\]"\'<>?\|«»„“¨‘’…—–¬\+\$\€£¥©®™•]'
+        text = re.sub(punctuation_pattern, ' ', text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
 
     def transcribe_audio(self, audio_path: str, sampling_rate: int = 16000, max_chunks: int = 10, chunk_duration: int = 30) -> str:
         try:
             logger.info(f"Starting transcription for {audio_path}")
             
-            # Предварительная обработка аудио
             audio, sr = self._preprocess_audio(audio_path, sampling_rate)
             logger.info(f"Audio loaded: {len(audio)} samples ({len(audio)/sr:.2f}s)")
             
             samples_per_chunk = chunk_duration * sampling_rate
             total_samples = len(audio)
             
-            # Если аудио умещается в один чанк
+            # Обработка для одного чанка
             if total_samples <= samples_per_chunk:
                 try:
                     inputs = self.processor(
@@ -152,6 +160,7 @@ class AudioProcessor:
                         )
                     
                     transcription = self.processor.decode(output_ids[0], skip_special_tokens=True)
+                    transcription = self._replace_punctuation(transcription)  # Очистка здесь
                     logger.info("Transcription completed successfully")
                     return transcription
                 
@@ -159,7 +168,7 @@ class AudioProcessor:
                     logger.error(f"Transcription failed for single chunk: {str(e)}")
                     raise ValueError(f"Transcription error: {str(e)}")
             
-            # Обработка длинных аудио по чанкам
+            # Обработка нескольких чанков
             transcriptions = []
             total_chunks = min(max_chunks, (total_samples + samples_per_chunk - 1) // samples_per_chunk)
             logger.info(f"Processing {total_chunks} chunks")
@@ -191,14 +200,23 @@ class AudioProcessor:
                         )
                     
                     chunk_text = self.processor.decode(output_ids[0], skip_special_tokens=True)
+                    chunk_text = self._replace_punctuation(chunk_text)  # Очистка каждого чанка
                     transcriptions.append(chunk_text)
                     logger.info(f"Chunk {chunk_idx + 1}/{total_chunks} processed")
                 
                 except Exception as e:
                     logger.error(f"Failed to process chunk {chunk_idx + 1}: {str(e)}")
                     transcriptions.append(f"[CHUNK_{chunk_idx + 1}_ERROR]")
+
+            # Дополнительная очистка финального текста
+            full_text = " ".join(transcriptions)
+            clean_text = self._replace_punctuation(full_text)
             
-            return " ".join(transcriptions)
+            # Логирование для отладки
+            logger.debug(f"Original text: {full_text}")
+            logger.debug(f"Cleaned text: {clean_text}")
+            
+            return clean_text
         
         except Exception as e:
             logger.error(f"Transcription failed: {str(e)}")

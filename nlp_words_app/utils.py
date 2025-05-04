@@ -161,6 +161,9 @@ def get_negative_words(text):
     negative_words = set()
     
     for word in cleaned_text.split():
+        if not re.search(r'[а-яёa-z]', word, flags=re.IGNORECASE):
+            continue
+        
         if len(word) < 2 or is_pronoun_or_stopword(word.lower()):
             continue
         
