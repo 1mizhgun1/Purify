@@ -68,27 +68,47 @@ def get_lemma(word):
     return lemma
 
 def check_word_with_mistral(word: str) -> bool:
-    """Проверка слова через Mistral API"""
-    time.sleep(API_DELAY_SECONDS)
+    """Проверка слова через Mistral API с повторными попытками"""
+    max_retries = 3 
+    base_delay = 2.0 
     
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": word}
-    ]
+    for attempt in range(max_retries):
+        try:
+            time.sleep(API_DELAY_SECONDS)  
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": word}
+            ]
+            
+            chat_response = mistral_client.chat.complete(
+                model=model_mistral,
+                messages=messages,
+                response_format={"type": "json_object"}
+            )
+            
+            response_json = json.loads(chat_response.choices[0].message.content)
+            return bool(int(response_json.get("answer", 0)))
+            
+        except Exception as e:
+            if "Service tier capacity exceeded" in str(e):
+                if attempt < max_retries - 1:
+                    current_delay = base_delay * (attempt + 1)  
+                    cache_logger.warning(
+                        f"Mistral API перегружен (попытка {attempt + 1}/{max_retries}). "
+                        f"Повтор через {current_delay} сек..."
+                    )
+                    time.sleep(current_delay)
+                    continue
+                else:
+                    cache_logger.error(
+                        f"Достигнут лимит попыток для слова '{word}'. Ошибка: {str(e)}"
+                    )
+            else:
+                cache_logger.error(f"Ошибка Mistral API для слова '{word}': {str(e)}")
+            return False
     
-    try:
-        chat_response = mistral_client.chat.complete(
-            model=model_mistral,
-            messages=messages,
-            response_format={"type": "json_object"}
-        )
-        
-        response_json = json.loads(chat_response.choices[0].message.content)
-        return bool(int(response_json.get("answer", 0)))
-    
-    except Exception as e:
-        cache_logger.error(f"Mistral API ERROR for word '{word}': {str(e)}")
-        return False 
+    return False  
 
 def is_material_word(word):
     """Проверка матерного слова с кэшированием и Mistral-подтверждением"""
