@@ -114,6 +114,9 @@ services:
          source: /opt/public/
          target: /opt/public/
        - type: bind
+         source: /opt/ext/
+         target: /opt/ext/
+       - type: bind
          source: ./nginx.conf
          target: /etc/nginx/nginx.conf
      ports:
