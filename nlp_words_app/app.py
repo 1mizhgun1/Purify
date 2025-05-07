@@ -1,34 +1,56 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
 from utils import *
-from flask_cors import CORS, cross_origin
 
-app = Flask(__name__)
-cors = CORS(app)
-app.config['CORS_HEADERS'] = 'Content-Type'
+app = FastAPI()
 
-@app.route('/analyze', methods=['POST'])
-@cross_origin()
-def analyze_text():
-    try:
-        data = request.get_json()
-        blocks = data.get('blocks', '')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST"],
+    allow_headers=["*"],
+)
 
-        negative_blocks = []
-        for block in blocks:
-            negative_words = get_negative_words(block)
-            if len(list(negative_words)) > 0:
-                negative_blocks.append({
-                    "block": block,
-                    "negative_words": list(negative_words)
-                })
+class TextBlock(BaseModel):
+    block: str
 
-        return jsonify(negative_blocks)
+class AnalysisRequest(BaseModel):
+    blocks: List[str]
 
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
+class NegativeBlockResponse(BaseModel):
+    block: str
+    negative_words: List[str]
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, debug=True)
+class ErrorResponse(BaseModel):
+    status: str
+    message: str
+
+@app.post(
+    "/analyze",
+    response_model=List[NegativeBlockResponse],
+    responses={500: {"model": ErrorResponse}}
+)
+async def analyze_text(request: AnalysisRequest):
+    """
+    Анализирует текст на наличие негативных слов.
+    
+    Принимает список текстовых блоков и возвращает те из них,
+    в которых найдены негативные слова.
+    """
+    negative_blocks = []
+    
+    for block in request.blocks:
+        negative_words = list(get_negative_words(block))
+        if negative_words:
+            negative_blocks.append({
+                "block": block,
+                "negative_words": negative_words
+            })
+    
+    return negative_blocks
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5001)
