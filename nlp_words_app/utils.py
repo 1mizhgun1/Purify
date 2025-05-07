@@ -6,10 +6,21 @@ import pickle
 import os
 from logger_config import cache_logger
 from dotenv import load_dotenv
+from mistralai import Mistral
+import json
+import time
 load_dotenv()
 
+# Redis Settings
 redis_url = os.environ['REDIS_URL']
 redis_client = redis.Redis.from_url(redis_url)
+
+# Misral Settings
+mistral_api_key = os.environ["MISTRAL_API_KEY"]
+mistral_client = Mistral(api_key=mistral_api_key)
+
+# Задержка
+API_DELAY_SECONDS = 2.0
 
 print("Cache Works?:")
 try:
@@ -56,16 +67,67 @@ def get_lemma(word):
     cache_set(cache_key, lemma, ttl=86400)
     return lemma
 
+def check_word_with_mistral(word: str) -> bool:
+    """Проверка слова через Mistral API с повторными попытками"""
+    max_retries = 3 
+    base_delay = 2.0 
+    
+    for attempt in range(max_retries):
+        try:
+            time.sleep(API_DELAY_SECONDS)  
+            
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": word}
+            ]
+            
+            chat_response = mistral_client.chat.complete(
+                model=model_mistral,
+                messages=messages,
+                response_format={"type": "json_object"}
+            )
+            
+            response_json = json.loads(chat_response.choices[0].message.content)
+            return bool(int(response_json.get("answer", 0)))
+            
+        except Exception as e:
+            if "Service tier capacity exceeded" in str(e):
+                if attempt < max_retries - 1:
+                    current_delay = base_delay * (attempt + 1)  
+                    cache_logger.warning(
+                        f"Mistral API перегружен (попытка {attempt + 1}/{max_retries}). "
+                        f"Повтор через {current_delay} сек..."
+                    )
+                    time.sleep(current_delay)
+                    continue
+                else:
+                    cache_logger.error(
+                        f"Достигнут лимит попыток для слова '{word}'. Ошибка: {str(e)}"
+                    )
+            else:
+                cache_logger.error(f"Ошибка Mistral API для слова '{word}': {str(e)}")
+            return False
+    
+    return False  
+
 def is_material_word(word):
-    """Проверка матерного слова с кэшированием"""
-    cache_key = f"{MAT_WORD_PREFIX}{word}"
-    cached = cache_get(cache_key)
-    if cached is not None:
-        return cached
+    """Проверка матерного слова с кэшированием и Mistral-подтверждением"""
+    # Проверяем кэш Mistral
+    mistral_cache_key = f"{MISTRAL_CACHE_PREFIX}{word}"
+    cached_result = cache_get(mistral_cache_key)
+    
+    if cached_result is not None:
+        return cached_result
     
     is_mat = bool(re.fullmatch(mat_regex, word, flags=re.VERBOSE))
-    cache_set(cache_key, is_mat, ttl=3600)
-    return is_mat
+    
+    if is_mat:
+        is_confirmed = check_word_with_mistral(word)
+        cache_set(mistral_cache_key, is_confirmed, ttl=MISTRAL_CACHE_TTL)
+        return is_confirmed
+    
+    cache_set(mistral_cache_key, False, ttl=MISTRAL_CACHE_TTL)
+    return False
 
 def get_word_tag(word, lemma):
     """Получение тега слова с кэшированием"""
@@ -119,6 +181,9 @@ def get_negative_words(text):
     negative_words = set()
     
     for word in cleaned_text.split():
+        if not re.search(r'[а-яёa-z]', word, flags=re.IGNORECASE):
+            continue
+        
         if len(word) < 2 or is_pronoun_or_stopword(word.lower()):
             continue
         
@@ -132,30 +197,22 @@ def get_negative_words(text):
         if is_pronoun_or_stopword(lemma):
             continue
 
-        tag = get_word_tag(word_upd, lemma)
-        # cache_logger.debug(f"Lemma: {lemma}")
-        # cache_logger.debug(f"Tag: {tag}")
-        # cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
-        # cache_logger.debug("")
-        
-        if tag == 'NGTV':
-            negative_words.add(word)
-            continue
-
-        elif is_material_word(word_upd):
+        # tag = get_word_tag(word_upd, lemma)
+        if is_material_word(word_upd):
+            cache_logger.debug(f"Lemma: {lemma}")
             cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV")
+            cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
             negative_words.add(word)
-            continue
-        
-        else:
-            corrected_word = checker.correct_spelling(word_upd)
-            if corrected_word:
-                corrected_lemma = get_lemma(corrected_word)
 
-                tag = get_word_tag(corrected_word, corrected_lemma)
-                if tag == 'NGTV':
-                    negative_words.add(word)
-                    continue
+        # else:
+        #     corrected_word = checker.correct_spelling(word_upd)
+        #     if corrected_word:
+        #         corrected_lemma = get_lemma(corrected_word)
+
+        #         tag = get_word_tag(corrected_word, corrected_lemma)
+        #         if tag == 'NGTV':
+        #             # negative_words.add(word)
+        #             continue
     
     print(negative_words)
     return list(negative_words)

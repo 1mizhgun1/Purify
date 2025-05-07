@@ -94,33 +94,33 @@ services:
     networks:
       - purify-network
 
-  nginx:
-    container_name: nginx
-    image: nginx
-    depends_on:
-      main:
-        condition: service_started
-    volumes:
-      - type: bind
-        source: /etc/letsencrypt/live/purify.pro/fullchain.pem
-        target: /etc/letsencrypt/live/purify.pro/fullchain.pem
-      - type: bind
-        source: /etc/letsencrypt/live/purify.pro/privkey.pem
-        target: /etc/letsencrypt/live/purify.pro/privkey.pem
-      - type: bind
-        source: /var/log/nginx/
-        target: /var/log/nginx/
-      - type: bind
-        source: /opt/public/
-        target: /opt/public/
-      - type: bind
-        source: ./nginx.conf
-        target: /etc/nginx/nginx.conf
-    ports:
-      - "443:443"
-      - "80:80"
-    networks:
-      - purify-network
+  # nginx:
+  #   container_name: nginx
+  #   image: nginx
+  #   depends_on:
+  #     main:
+  #       condition: service_started
+  #   volumes:
+  #     - type: bind
+  #       source: /etc/letsencrypt/live/purify.pro/fullchain.pem
+  #       target: /etc/letsencrypt/live/purify.pro/fullchain.pem
+  #     - type: bind
+  #       source: /etc/letsencrypt/live/purify.pro/privkey.pem
+  #       target: /etc/letsencrypt/live/purify.pro/privkey.pem
+  #     - type: bind
+  #       source: /var/log/nginx/
+  #       target: /var/log/nginx/
+  #     - type: bind
+  #       source: /opt/public/
+  #       target: /opt/public/
+  #     - type: bind
+  #       source: ./nginx.conf
+  #       target: /etc/nginx/nginx.conf
+  #   ports:
+  #     - "443:443"
+  #     - "80:80"
+  #   networks:
+  #     - purify-network
 
   postgres:
     env_file:
@@ -136,6 +136,20 @@ services:
     volumes:
       - ./build/initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
       - postgres-data:/var/lib/postgresql/data
+    networks:
+      - purify-network
+  video_processing_service:
+    container_name: video_processing_service
+    build:
+      context: ./video_processing_service
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:5003:5003"
+    restart: unless-stopped
+    volumes:
+      - ./video_processing_service:/app
     networks:
       - purify-network
 
