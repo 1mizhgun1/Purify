@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from models import AudioDownloadRequest
 from services import AudioProcessor
@@ -9,6 +10,14 @@ import logging
 import time
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST"],
+    allow_headers=["*"],
+)
+
 processor = AudioProcessor()
 logger = logging.getLogger(__name__)
 DELAY = 5
