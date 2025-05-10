@@ -41,7 +41,7 @@ COPY ./easy_ocr_app/weights_config/user_network/custom_example.yaml /root/.EasyO
 COPY ./easy_ocr_app/weights_config/model/custom_example.pth /root/.EasyOCR/model
 COPY ./easy_ocr_app/weights_config/model/craft_mlt_25k.pth /root/.EasyOCR/model
 
-COPY ./requirements.txt .
+COPY ./easy_ocr_app/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN pip install easyocr
