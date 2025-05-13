@@ -122,9 +122,9 @@ def is_material_word(word):
     is_mat = bool(re.fullmatch(mat_regex, word, flags=re.VERBOSE))
     
     if is_mat:
-        is_confirmed = check_word_with_mistral(word)
-        cache_set(mistral_cache_key, is_confirmed, ttl=MISTRAL_CACHE_TTL)
-        return is_confirmed
+        # is_confirmed = check_word_with_mistral(word)
+        cache_set(mistral_cache_key, True, ttl=MISTRAL_CACHE_TTL)
+        return True
     
     cache_set(mistral_cache_key, False, ttl=MISTRAL_CACHE_TTL)
     return False
@@ -142,11 +142,11 @@ def get_word_tag(word, lemma):
         cache_set(word_cache_key, cached_tag)
         return cached_tag
     
-    tag, prob = term_to_tag_dict.get(lemma, ["NEUT", 0.0])
-    if tag == 'NGTV' and prob < THRESHOLD:
-        tag = "NGTV"
-    else:
-        tag = "NEUT"
+    tag, _ = term_to_tag_dict.get(lemma, [None, 0.0])
+    # if tag == 'NGTV' and prob < THRESHOLD:
+        # tag = "NGTV"
+    # else:
+        # tag = "NEUT"
     cache_set(word_cache_key, tag)
     cache_set(lemma_cache_key, tag)
     return tag
@@ -197,12 +197,17 @@ def get_negative_words(text):
         if is_pronoun_or_stopword(lemma):
             continue
 
-        # tag = get_word_tag(word_upd, lemma)
+        tag = get_word_tag(word_upd, lemma)
         if is_material_word(word_upd):
             cache_logger.debug(f"Lemma: {lemma}")
-            cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV")
-            cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
-            negative_words.add(word)
+            cache_logger.debug(f"Tag: {tag}")
+            if tag is None:
+                cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV")
+                cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
+                negative_words.add(word)
+            else:
+                cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NEUT")
+                cache_logger.debug(f"Neut: {word_upd}")
 
         # else:
         #     corrected_word = checker.correct_spelling(word_upd)
