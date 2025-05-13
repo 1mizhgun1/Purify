@@ -134,13 +134,13 @@ def get_word_tag(word, lemma):
     word_cache_key = f"{WORD_TAG_PREFIX}word:{word}"
     cached_tag = cache_get(word_cache_key)
     if cached_tag is not None:
-        return cached_tag
+        return cached_tag, True
     
     lemma_cache_key = f"{WORD_TAG_PREFIX}lemma:{lemma}"
     cached_tag = cache_get(lemma_cache_key)
     if cached_tag is not None:
         cache_set(word_cache_key, cached_tag)
-        return cached_tag
+        return cached_tag, True
     
     tag, _ = term_to_tag_dict.get(lemma, [None, 0.0])
     # if tag == 'NGTV' and prob < THRESHOLD:
@@ -149,7 +149,7 @@ def get_word_tag(word, lemma):
         # tag = "NEUT"
     cache_set(word_cache_key, tag)
     cache_set(lemma_cache_key, tag)
-    return tag
+    return tag, False
 
 def clean_text(text):
     text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
@@ -197,17 +197,23 @@ def get_negative_words(text):
         if is_pronoun_or_stopword(lemma):
             continue
 
-        tag = get_word_tag(word_upd, lemma)
-        if is_material_word(word_upd):
-            cache_logger.debug(f"Lemma: {lemma}")
-            cache_logger.debug(f"Tag: {tag}")
-            if tag is None:
-                cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV")
+        tag, flag = get_word_tag(word_upd, lemma)
+        if flag is True:
+            if tag == "NGTV_MAT":
+                cache_logger.debug(f"Lemma: {lemma}")
                 cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
                 negative_words.add(word)
-            else:
-                cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NEUT")
-                cache_logger.debug(f"Neut: {word_upd}")
+        else:
+            if is_material_word(word_upd):
+                cache_logger.debug(f"Lemma: {lemma}")
+                cache_logger.debug(f"Tag: {tag}")
+                if tag is None:
+                    cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NGTV_MAT")
+                    cache_logger.debug(f"Mat: {is_material_word(word_upd)}")
+                    negative_words.add(word)
+                else:
+                    cache_set(f"{WORD_TAG_PREFIX}word:{word}", "NEUT")
+                    cache_logger.debug(f"Neut: {word_upd}")
 
         # else:
         #     corrected_word = checker.correct_spelling(word_upd)
