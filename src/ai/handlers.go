@@ -15,6 +15,9 @@ import (
 	"purify/src/config"
 	"purify/src/utils"
 
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
@@ -225,6 +228,7 @@ type ReplaceRequest struct {
 	Blocks        []string `json:"blocks"`
 	Preconception bool     `json:"preconception"`
 	Agitation     bool     `json:"agitation"`
+	Site          string   `json:"site"`
 }
 
 type ReplaceResponse struct {
@@ -331,6 +335,202 @@ end:
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
 		return
 	}
+}
+
+const (
+	insertBlock = `
+        INSERT INTO block_replacements(site, aggressive_word_count, block_hash)
+        SELECT $1, $2, $3
+        WHERE NOT EXISTS (
+            SELECT 1 FROM block_replacements WHERE site = $1 AND block_hash = $3
+        );`
+
+	getAggressiveWordCount = `
+        SELECT aggressive_word_count FROM site_ratings WHERE site = $1;`
+
+	calculateSiteRating = `
+        SELECT COUNT(*) + 1 FROM site_ratings
+        WHERE aggressive_word_count < (
+            SELECT aggressive_word_count FROM site_ratings WHERE site = $1
+        );`
+
+	selectAllRatings = `
+        SELECT site, aggressive_word_count FROM site_ratings ORDER BY aggressive_word_count ASC;`
+)
+
+type SiteRating struct {
+	Place             int    `json:"place"`
+	Site              string `json:"site"`
+	AggressiveWordSum int    `json:"aggressive_words"`
+}
+
+func (a *AI) insertBlockIfNotExists(ctx context.Context, site, blockHash string, count int) error {
+	_, err := a.db.Exec(ctx, insertBlock, site, count, blockHash)
+	if err != nil {
+		utils.LogError(ctx, err, "failed to insert block into block_replacements")
+		return err
+	}
+	return nil
+}
+
+func (a *AI) GetSiteRating(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	site := r.URL.Query().Get("site")
+	if site == "" {
+		utils.LogError(ctx, errors.New("missing 'site' parameter"), utils.MsgErrUnmarshalRequest)
+		http.Error(w, "Missing 'site' parameter", http.StatusBadRequest)
+		return
+	}
+
+	var totalWords int
+	err := a.db.QueryRow(ctx, getAggressiveWordCount, site).Scan(&totalWords)
+
+	if err != nil || totalWords == 0 {
+		msg := "No data for this site"
+		utils.LogError(ctx, err, msg)
+		http.Error(w, msg, http.StatusNotFound)
+		return
+	}
+
+	var place int
+	err = a.db.QueryRow(ctx, calculateSiteRating, site).Scan(&place)
+
+	if err != nil {
+		utils.LogError(ctx, err, "failed to calculate site rating place")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]int{"place": place}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+	}
+}
+
+func (a *AI) GetAllRating(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	rows, err := a.db.Query(ctx, selectAllRatings)
+
+	if err != nil {
+		utils.LogError(ctx, err, "failed to query all ratings from site_ratings")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var ratings []SiteRating
+	for rows.Next() {
+		var rating SiteRating
+		if err := rows.Scan(&rating.Site, &rating.AggressiveWordSum); err != nil {
+			utils.LogError(ctx, err, "failed to scan row from site_ratings")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		rating.Place = len(ratings) + 1
+		ratings = append(ratings, rating)
+	}
+
+	if err := json.NewEncoder(w).Encode(ratings); err != nil {
+		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+	}
+}
+
+func (a *AI) NewReplace(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req ReplaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.LogError(ctx, err, utils.MsgErrUnmarshalRequest)
+		http.Error(w, utils.Invalid, http.StatusBadRequest)
+		return
+	}
+
+	requestType := 0
+	var promptFormat string
+
+	if req.Preconception && req.Agitation {
+		promptFormat = changeAllPrompt
+	} else if req.Preconception {
+		promptFormat = changePreconceptionPrompt
+		requestType = 1
+	} else if req.Agitation {
+		promptFormat = changeAgitationPrompt
+		requestType = 2
+	} else {
+		resp := ReplaceResponse{Blocks: make([]Block, 0)}
+		for _, block := range req.Blocks {
+			resp.Blocks = append(resp.Blocks, Block{
+				Text:               block,
+				ReplaceResponseGPT: ReplaceResponseGPT{Result: []Replacement{}},
+			})
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+			http.Error(w, utils.Internal, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	chunks := utils.SplitBlocksIntoChunks(req.Blocks, a.cfg.MaxTokensInChunk)
+	wg := &sync.WaitGroup{}
+	responsesCh := make(chan ChunkInChannelReplace)
+	errorsCh := make(chan error)
+
+	for i, chunk := range chunks {
+		wg.Add(1)
+		go a.sendChunkRequestReplace(ctx, promptFormat, requestType, chunk, i, wg, responsesCh, errorsCh)
+	}
+
+	go func() {
+		wg.Wait()
+		close(responsesCh)
+		close(errorsCh)
+	}()
+
+	chunkResponses := make([]ChunkInChannelReplace, 0)
+	for response := range responsesCh {
+		chunkResponses = append(chunkResponses, response)
+	}
+
+	allResponses := joinResponsesReplace(chunkResponses)
+
+	resp := ReplaceResponse{Blocks: make([]Block, 0)}
+	for _, block := range req.Blocks {
+		found := make([]Replacement, 0)
+		for _, replacement := range allResponses.Result {
+			if strings.Contains(block, replacement.From) {
+				found = append(found, replacement)
+			}
+		}
+
+		wordCount := len(found)
+		blockHash := generateBlockHash(req.Site, block)
+
+		if wordCount > 0 {
+			if err := a.insertBlockIfNotExists(ctx, req.Site, blockHash, wordCount); err != nil {
+				utils.LogError(ctx, err, "failed to insert block")
+			}
+		}
+
+		resp.Blocks = append(resp.Blocks, Block{
+			Text:               block,
+			ReplaceResponseGPT: ReplaceResponseGPT{Result: found},
+		})
+	}
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
+		http.Error(w, utils.Internal, http.StatusInternalServerError)
+	}
+}
+
+func generateBlockHash(site, block string) string {
+	hash := sha256.New()
+	hash.Write([]byte(site + "|" + block))
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type ChunkInChannelReplace struct {
