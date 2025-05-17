@@ -267,7 +267,7 @@ def blur_bboxes(image: np.ndarray, bboxes: List[List[List[int]]],
     
     if image_path is not None:
         try:
-            cv2.imwrite(image_path, image)
+            # cv2.imwrite(image_path, image)
             logger.info(f"Blurred image saved to {image_path}")
         except Exception as e:
             logger.error(f"Failed to save blurred image to {image_path}: {str(e)}")
@@ -280,7 +280,7 @@ def analyze_text_with_api(texts: List[str]) -> List[Dict[str, Any]]:
     try:
         payload = {"blocks": texts}
         response = requests.post(
-            "http://nlp_words:5001/analyze",
+            "http://nlp_words:5003/analyze",
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=5
@@ -329,7 +329,7 @@ def process_single_result(ocr_result: List[Tuple],
 
         if debug_dir:
             debug_path = os.path.join(debug_dir, f"adult_blurred_{file_suffix}.jpg")
-            cv2.imwrite(debug_path, blurred_image)
+            # cv2.imwrite(debug_path, blurred_image)
 
         return {
             "bboxes": [],
@@ -355,7 +355,7 @@ def process_single_result(ocr_result: List[Tuple],
         for bbox in bboxes:
             pts = np.array(bbox, dtype=np.int32)
             cv2.polylines(debug_image, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
-        cv2.imwrite(debug_orig_path, debug_image)
+        # cv2.imwrite(debug_orig_path, debug_image)
     
     api_response = analyze_text_with_api([combined_text])
     neg_words = api_response[0].get("negative_words", []) if api_response else []
@@ -378,7 +378,7 @@ def process_single_result(ocr_result: List[Tuple],
             for bbox in bad_bboxes:
                 pts = np.array(bbox, dtype=np.int32)
                 cv2.polylines(debug_image, [pts], isClosed=True, color=(0, 0, 255), thickness=2)
-            cv2.imwrite(debug_bad_boxes_path, debug_image)
+            # cv2.imwrite(debug_bad_boxes_path, debug_image)
             debug_info["bad_boxes_image"] = debug_bad_boxes_path
         
         blurred_image = blur_bboxes(
@@ -393,7 +393,7 @@ def process_single_result(ocr_result: List[Tuple],
         if debug_dir:
             logger.debug(f"Timestamp: {timestamp}")
             debug_final_path = os.path.join(debug_dir, f"final_{file_suffix}.jpg")
-            cv2.imwrite(debug_final_path, blurred_image)
+            # cv2.imwrite(debug_final_path, blurred_image)
             debug_info["final_image"] = debug_final_path
 
     else:

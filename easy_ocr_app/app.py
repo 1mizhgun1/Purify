@@ -96,12 +96,12 @@ def process_image_sync(image_data: bytes) -> dict:
         if is_adult:
             logger.warning(f"Adult content detected: {adult_class} (prob: {adult_prob:.2f})")
             debug_path = f"debug_{int(time.time())}_initial_adult.jpg"
-            cv2.imwrite(filename=debug_path, img=cv2.cvtColor(original_bgr, cv2.COLOR_BGR2RGB))
+            # cv2.imwrite(filename=debug_path, img=cv2.cvtColor(original_bgr, cv2.COLOR_BGR2RGB))
             logger.info(f"Saved debug image to {debug_path}")
             blurred = cv2.GaussianBlur(original_bgr, (1025, 1025), 0)  # Работаем с BGR
             _, buffer = cv2.imencode('.jpg', blurred)
             debug_path = f"debug_{int(time.time())}_blurred_adult.jpg"
-            cv2.imwrite(filename=debug_path, img=blurred)
+            # cv2.imwrite(filename=debug_path, img=blurred)
             logger.info(f"Saved debug image to {debug_path}")
             return {
                 "bboxes": [],
@@ -120,8 +120,8 @@ def process_image_sync(image_data: bytes) -> dict:
         blurred_cv = cv2.resize(blurred_cv, (orig_w, orig_h))
         
         _, buffer = cv2.imencode('.jpg', blurred_cv)
-        debug_path = f"debug_{int(time.time())}_blurred_final.jpg"
-        cv2.imwrite(img=blurred_cv, filename=debug_path)
+        # debug_path = f"debug_{int(time.time())}_blurred_final.jpg"
+        # cv2.imwrite(img=blurred_cv, filename=debug_path)
 
         return {
             "bboxes": bboxes,
