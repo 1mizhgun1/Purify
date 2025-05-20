@@ -280,7 +280,7 @@ def analyze_text_with_api(texts: List[str]) -> List[Dict[str, Any]]:
     try:
         payload = {"blocks": texts}
         response = requests.post(
-            "http://nlp_words:5003/analyze",
+            "http://nlp_words:5001/analyze",
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=5
