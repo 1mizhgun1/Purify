@@ -70,13 +70,13 @@ func (e *EasyOcr) ProcessImage(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[DEBUG] answer from cache\n")
 
 		parts := strings.Split(answerFromCache, "/")
-		if len(parts) != 2 {
-			utils.LogError(ctx, err, "failed to parse answer from cache")
+		if len(parts) != 3 {
+			utils.LogErrorMessage(ctx, "failed to parse answer from cache")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		resp := ProcessImageResponse{Image: parts[1]}
+		resp := ProcessImageResponse{Image: parts[2]}
 		if err = json.NewEncoder(w).Encode(resp); err != nil {
 			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 			http.Error(w, utils.Internal, http.StatusInternalServerError)
@@ -172,7 +172,7 @@ func (e *EasyOcr) SwapImage(w http.ResponseWriter, r *http.Request) {
 			answerFromCache = strings.TrimPrefix(answerFromCache, "/")
 			parts := strings.Split(answerFromCache, "/")
 			if len(parts) != 2 {
-				utils.LogError(ctx, err, "failed to parse answer from cache")
+				utils.LogErrorMessage(ctx, "failed to parse answer from cache")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
