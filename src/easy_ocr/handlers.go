@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/minio/minio-go/v7"
-	"github.com/satori/uuid"
 	"purify/src/cache"
 	"purify/src/config"
 	"purify/src/utils"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/satori/uuid"
 )
 
 const featureProcessImage = "process_image"
@@ -67,7 +68,15 @@ func (e *EasyOcr) ProcessImage(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		fmt.Printf("[DEBUG] answer from cache\n")
-		resp := ProcessImageResponse{Image: answerFromCache}
+
+		parts := strings.Split(answerFromCache, "/")
+		if len(parts) != 2 {
+			utils.LogError(ctx, err, "failed to parse answer from cache")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		resp := ProcessImageResponse{Image: parts[1]}
 		if err = json.NewEncoder(w).Encode(resp); err != nil {
 			utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 			http.Error(w, utils.Internal, http.StatusInternalServerError)
@@ -114,7 +123,7 @@ func (e *EasyOcr) ProcessImage(w http.ResponseWriter, r *http.Request) {
 		utils.LogError(ctx, err, "failed to cache answer")
 	}
 
-	resp := ProcessImageResponse{Image: url}
+	resp := ProcessImageResponse{Image: objectName}
 	if err = json.NewEncoder(w).Encode(resp); err != nil {
 		utils.LogError(ctx, err, utils.MsgErrMarshalResponse)
 		http.Error(w, utils.Internal, http.StatusInternalServerError)
