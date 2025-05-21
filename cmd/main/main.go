@@ -179,7 +179,7 @@ func main() {
 	r.Handle("/analyze_text", http.HandlerFunc(mistralAI.AnalyzeText)).Methods(http.MethodPost, http.MethodOptions)
 
 	r.Handle("/blur", http.HandlerFunc(chatGPT.Blur)).Methods(http.MethodPost, http.MethodOptions)
-	r.Handle("/replace", http.HandlerFunc(chatGPT.NewReplace)).Methods(http.MethodPost, http.MethodOptions)
+	r.Handle("/replace", http.HandlerFunc(chatGPT.Replace)).Methods(http.MethodPost, http.MethodOptions)
 	r.Handle("/get_all_rating", http.HandlerFunc(chatGPT.GetAllRating)).Methods(http.MethodGet, http.MethodOptions)
 	r.Handle("/get_site_rating", http.HandlerFunc(chatGPT.GetSiteRating)).Methods(http.MethodGet, http.MethodOptions)
 	r.Handle("/simplify", http.HandlerFunc(chatGPT.Simplify)).Methods(http.MethodPost, http.MethodOptions)
